@@ -60,15 +60,18 @@ def jinja_list(entities: list[str]) -> str:
 def alert_strip(home: dict) -> dict:
     """One markdown card listing what needs attention; hidden when there is nothing."""
     lights = [l for r in home["rooms"] for l in r.get("lights", [])]
+    label = home.get("ignore_label", "")
     template = (
         "{%- set ns = namespace(items=[]) -%}\n"
+        f"{{%- set lbl = '{label}' -%}}"
+        "{%- set ignore = (label_entities(lbl) + (label_devices(lbl) | map('device_entities') | sum(start=[]))) if lbl else [] -%}\n"
         "{%- for s in states.binary_sensor | selectattr('attributes.device_class', 'defined')"
         " | selectattr('attributes.device_class', 'in', ['door', 'window', 'garage_door'])"
-        " | selectattr('state', 'eq', 'on') -%}"
+        " | selectattr('state', 'eq', 'on') | rejectattr('entity_id', 'in', ignore) -%}"
         "{%- set ns.items = ns.items + ['🚪 ' ~ s.name ~ ' is open'] -%}{%- endfor -%}\n"
         "{%- for s in states.sensor | selectattr('attributes.device_class', 'defined')"
         " | selectattr('attributes.device_class', 'eq', 'battery')"
-        " | selectattr('state', 'is_number') -%}"
+        " | selectattr('state', 'is_number') | rejectattr('entity_id', 'in', ignore) -%}"
         "{%- if s.state | float(100) < 15 -%}"
         "{%- set ns.items = ns.items + ['🪫 ' ~ s.name ~ ' ' ~ s.state ~ '%'] -%}{%- endif -%}{%- endfor -%}\n"
         f"{{%- set on = expand({jinja_list(lights)}) | selectattr('state', 'eq', 'on') | list | count -%}}\n"
