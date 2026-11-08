@@ -1,0 +1,61 @@
+blueprint:
+  name: Wall panel — "rain at 17:40" (first rain in the next hours)
+  description: >-
+    Every 15 minutes, reads your weather integration's hourly forecast and
+    stores when the first rain is expected in the next few hours ("now",
+    "17:40", or empty when it stays dry) in a Text helper. A wall panel can
+    show it next to the door — "☔ Rain from 17:40, take an umbrella".
+
+
+    **Create first:** a Text helper, e.g. "Rain at".
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/rain_soon.yaml
+  input:
+    weather:
+      name: Weather (with an hourly forecast)
+      selector: { entity: { domain: weather } }
+    hours:
+      name: Look ahead
+      default: 3
+      selector: { number: { min: 1, max: 12, unit_of_measurement: h } }
+    probability:
+      name: Count as rain from this probability
+      default: 60
+      selector: { number: { min: 10, max: 100, unit_of_measurement: "%" } }
+    target:
+      name: Store in (Text helper)
+      selector: { entity: { domain: input_text } }
+
+mode: single
+
+variables:
+  weather: !input weather
+  hours: !input hours
+  probability: !input probability
+  target: !input target
+
+triggers:
+  - trigger: time_pattern
+    minutes: /15
+  - trigger: homeassistant
+    event: start
+
+actions:
+  - action: weather.get_forecasts
+    target: { entity_id: "{{ weather }}" }
+    data: { type: hourly }
+    response_variable: fc
+  - action: input_text.set_value
+    target: { entity_id: "{{ target }}" }
+    data:
+      value: >-
+        {%- set ns = namespace(t='') -%}
+        {%- for f in fc[weather].forecast if not ns.t -%}
+          {%- set dt = as_local(as_datetime(f.datetime)) -%}
+          {%- if dt <= now() + timedelta(hours=hours | int) and dt >= now() - timedelta(minutes=59)
+                and (f.condition in ['rainy', 'pouring', 'lightning-rainy', 'snowy-rainy', 'hail']
+                     or (f.precipitation_probability | default(0) | float(0)) >= probability | float) -%}
+            {%- set ns.t = 'now' if dt <= now() else dt.strftime('%H:%M') -%}
+          {%- endif -%}
+        {%- endfor -%}
+        {{ ns.t }}

@@ -1,0 +1,28 @@
+blueprint:
+  name: Wall panel — admin mode switches itself off
+  description: >-
+    If your wall panel hides the header and sidebar (kiosk mode) unless an
+    "admin" toggle is on, this turns the toggle off again after a while — so
+    the panel never stays unlocked because someone forgot.
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/admin_timeout.yaml
+  input:
+    admin:
+      name: Admin toggle
+      selector: { entity: { domain: input_boolean } }
+    after:
+      name: Switch it off after
+      default: { minutes: 10 }
+      selector: { duration: {} }
+
+mode: single
+
+triggers:
+  - trigger: state
+    entity_id: !input admin
+    to: "on"
+    for: !input after
+
+actions:
+  - action: input_boolean.turn_off
+    target: { entity_id: !input admin }

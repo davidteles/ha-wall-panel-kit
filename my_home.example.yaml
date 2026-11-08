@@ -17,6 +17,14 @@ tablet:
     idle_seconds: 180
     photos: media-source://media_source/local/wallpanel
 
+panel:                               # optional — needs the kit's blueprints (see README)
+  leaving_script: script.leaving     # "Leaving" button script blueprint
+  leaving_timer: timer.leaving       # its countdown
+  note: input_text.panel_note        # note by voice
+  note_from: input_text.panel_note_from
+  rain_at: input_text.rain_at        # "rain from 17:40" in the attention strip
+  last_arrival: input_text.last_arrival   # welcome greeting
+
 energy:                              # optional — adds the Energy page
   power_now: sensor.home_power       # current consumption (W)
   energy_today: sensor.home_energy_today   # optional (kWh)
