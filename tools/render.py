@@ -74,7 +74,8 @@ def alert_strip(home: dict) -> dict:
         f"{{%- set on = expand({jinja_list(lights)}) | selectattr('state', 'eq', 'on') | list | count -%}}\n"
         "{%- if states('zone.home') | int(1) == 0 and on > 0 -%}"
         "{%- set ns.items = ns.items + ['💡 ' ~ on ~ ' lights on and nobody home'] -%}{%- endif -%}\n"
-        "{{ ns.items | join('<br>') }}"
+        + rain_line(home)
+        + "{{ ns.items | join('<br>') }}"
     )
     return {
         "type": "markdown",
@@ -82,6 +83,80 @@ def alert_strip(home: dict) -> dict:
         "grid_options": {"columns": 12},
         "card_mod": {"style": "ha-card { border-left: 4px solid var(--warning-color) !important; }"},
     }
+
+
+def panel(home: dict) -> dict:
+    return home.get("panel") or {}
+
+
+def rain_line(home: dict) -> str:
+    rain = panel(home).get("rain_at")
+    if not rain:
+        return ""
+    return (
+        f"{{%- set r = states('{rain}') -%}}"
+        "{%- if r not in ['', 'unknown', 'unavailable'] -%}"
+        "{%- set ns.items = ['☔ Rain ' ~ ('now' if r == 'now' else 'from ' ~ r) ~ ' — take an umbrella'] + ns.items -%}"
+        "{%- endif -%}\n"
+    )
+
+
+def panel_cards(home: dict) -> list[dict]:
+    """Welcome greeting, note and Leaving button + countdown (from the kit's blueprints)."""
+    p = panel(home)
+    cards: list[dict] = []
+    if p.get("last_arrival"):
+        cards.append({
+            "type": "markdown",
+            "content": (
+                f"{{% set a = states('{p['last_arrival']}').split('|') %}}"
+                "{% if a | count == 2 and (now().timestamp() - a[1] | float(0)) < 600 %}"
+                "## Welcome home, {{ a[0] }} 👋{% endif %}"
+            ),
+            "grid_options": {"columns": 12},
+        })
+    if p.get("note"):
+        frm = p.get("note_from")
+        cards.append({
+            "type": "custom:mushroom-template-card",
+            "icon": "mdi:note-text",
+            "color": "amber",
+            "primary": f"{{{{ states('{p['note']}') }}}}",
+            "secondary": (f"{{{{ ('from ' ~ states('{frm}') ~ ' · ') if states('{frm}') not in ['', 'unknown', 'unavailable'] else '' }}}}tap to clear" if frm else "Tap to clear"),
+            "multiline_secondary": True,
+            "tap_action": {
+                "action": "perform-action",
+                "perform_action": "input_text.set_value",
+                "target": {"entity_id": p["note"]},
+                "data": {"value": ""},
+            },
+            "visibility": [{"condition": "state", "entity": p["note"], "state_not": ["", "unknown", "unavailable"]}],
+            "grid_options": {"columns": 12},
+        })
+    if p.get("leaving_script") and p.get("leaving_timer"):
+        timer = p["leaving_timer"]
+        idle = [{"condition": "state", "entity": timer, "state_not": "active"}]
+        active = [{"condition": "state", "entity": timer, "state": "active"}]
+        cards.append({
+            "type": "custom:mushroom-template-card",
+            "icon": "mdi:exit-run",
+            "color": "blue",
+            "primary": "Leaving",
+            "secondary": "Lights off, music paused, alarm on in a minute",
+            "tap_action": {"action": "perform-action", "perform_action": p["leaving_script"]},
+            "visibility": idle,
+            "grid_options": {"columns": 12},
+        })
+        cards.append({"type": "tile", "entity": timer, "name": "Leaving…", "icon": "mdi:exit-run",
+                      "visibility": active, "grid_options": {"columns": 12}})
+        for label, icon, service, color in (("I'm staying", "mdi:close", "timer.cancel", "grey"),
+                                            ("Arm now", "mdi:shield-lock", "timer.finish", "red")):
+            cards.append({
+                "type": "custom:mushroom-template-card", "primary": label, "icon": icon, "color": color,
+                "tap_action": {"action": "perform-action", "perform_action": service, "target": {"entity_id": timer}},
+                "visibility": active, "grid_options": {"columns": 6},
+            })
+    return cards
 
 
 def lights_summary(home: dict) -> dict:
@@ -112,7 +187,7 @@ def home_sections(home: dict, phone: bool) -> list[dict]:
     }
     if phone:
         weather["hide_clock"] = True
-    first = [weather, alert_strip(home), lights_summary(home)]
+    first = [weather] + panel_cards(home) + [alert_strip(home), lights_summary(home)]
     if home.get("alarm"):
         first.append(tile(home["alarm"], 6, name="Alarm"))
     sections = [{"type": "grid", "cards": first}]

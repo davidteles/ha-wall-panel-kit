@@ -1,0 +1,138 @@
+blueprint:
+  name: Wall panel — Leaving countdown (arm, lights out, or Cancel puts it back)
+  description: >-
+    Works with the "Leaving" button script. While its countdown runs, a
+    dashboard can show *Cancel* and *Arm now* (finish the timer).
+
+
+    - **Countdown ends:** the alarm arms away (if you have one), the way-out
+      lights go off, and the outside light a few minutes later — time to get to
+      the car. If the alarm refuses to arm (a window open…) you're told what's
+      open.
+
+    - **Cancelled ("I'm staying"):** every light and speaker goes back to
+      exactly how it was before you pressed Leaving.
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/leaving_countdown.yaml
+  input:
+    timer:
+      name: Countdown (Timer helper)
+      selector: { entity: { domain: timer } }
+    way_out:
+      name: Way-out lights
+      default: []
+      selector: { entity: { domain: [light, switch], multiple: true } }
+    outside:
+      name: Outside light
+      default: []
+      selector: { entity: { domain: [light, switch] } }
+    outside_delay:
+      name: Outside light off after
+      default: { minutes: 3 }
+      selector: { duration: {} }
+    alarm:
+      name: Alarm to arm (optional)
+      default: []
+      selector: { entity: { domain: alarm_control_panel } }
+    alarm_code:
+      name: Alarm code (only if your alarm needs one to arm)
+      default: ""
+      selector: { text: { type: password } }
+    scene_id:
+      name: Snapshot scene id (same as in the Leaving script)
+      default: before_leaving
+      selector: { text: {} }
+    notify_action:
+      name: Notification action
+      default: notify.notify
+      selector: { text: {} }
+
+mode: restart
+
+trigger_variables:
+  timer_id: !input timer
+
+variables:
+  way_out: !input way_out
+  outside: !input outside
+  outside_delay: !input outside_delay
+  alarm: !input alarm
+  alarm_code: !input alarm_code
+  scene_id: !input scene_id
+  notify_action: !input notify_action
+  scene_entity: "scene.{{ scene_id }}"
+
+triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data: { entity_id: "{{ timer_id }}" }
+    id: finished
+  - trigger: event
+    event_type: timer.cancelled
+    event_data: { entity_id: "{{ timer_id }}" }
+    id: cancelled
+
+actions:
+  - choose:
+      - alias: Cancelled → put everything back
+        conditions: "{{ trigger.id == 'cancelled' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ states[scene_entity] is not none }}"
+            then:
+              - action: scene.turn_on
+                target: { entity_id: "{{ scene_entity }}" }
+                continue_on_error: true
+              - action: scene.delete
+                target: { entity_id: "{{ scene_entity }}" }
+                continue_on_error: true
+      - alias: Countdown over → arm, lights out
+        conditions: "{{ trigger.id == 'finished' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ states[scene_entity] is not none }}"
+            then:
+              - action: scene.delete
+                target: { entity_id: "{{ scene_entity }}" }
+                continue_on_error: true
+          - if:
+              - condition: template
+                value_template: "{{ way_out | select('is_state', 'on') | list | count > 0 }}"
+            then:
+              - action: homeassistant.turn_off
+                target: { entity_id: "{{ way_out | select('is_state', 'on') | list }}" }
+          - if:
+              - condition: template
+                value_template: "{{ alarm | length > 0 and is_state(alarm, 'disarmed') }}"
+            then:
+              - action: alarm_control_panel.alarm_arm_away
+                target: { entity_id: "{{ alarm }}" }
+                data: "{{ {'code': alarm_code} if alarm_code else {} }}"
+                continue_on_error: true
+              - wait_template: "{{ not is_state(alarm, 'disarmed') }}"
+                timeout: { seconds: 15 }
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(alarm, 'disarmed') }}"
+                then:
+                  - action: "{{ notify_action }}"
+                    data:
+                      title: "🔓 The alarm did not turn on"
+                      message: >-
+                        {% set os = state_attr(alarm, 'open_sensors') or {} %}
+                        {% set names = os.keys() | map('state_attr', 'friendly_name') | reject('none') | list %}
+                        {{ ('Still open: ' ~ names | join(', ') ~ '. ') if names else '' }}Close it and arm the alarm from the app.
+                      data: { tag: leaving-alarm, push: { interruption-level: time-sensitive } }
+          - if:
+              - condition: template
+                value_template: "{{ outside | length > 0 and is_state(outside, 'on') }}"
+            then:
+              - delay: "{{ outside_delay }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(outside, 'on') }}"
+                then:
+                  - action: homeassistant.turn_off
+                    target: { entity_id: "{{ outside }}" }

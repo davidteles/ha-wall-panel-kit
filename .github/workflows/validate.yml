@@ -26,5 +26,13 @@ jobs:
           assert "kiosk_mode" not in phone and "wallpanel" not in phone, "phone must never get kiosk or screensaver"
           print(len(tablet["views"]), "tablet views,", len(phone["views"]), "phone views")
           PY
-      - name: Parse the theme
-        run: python -c "import yaml; yaml.safe_load(open('themes/wall-panel.yaml'))"
+      - name: Parse the theme and blueprints
+        run: |
+          python - <<'PY'
+          import glob, yaml
+          class L(yaml.SafeLoader): pass
+          L.add_constructor("!input", lambda l, n: l.construct_scalar(n))
+          yaml.safe_load(open("themes/wall-panel.yaml"))
+          for f in glob.glob("blueprints/**/*.yaml", recursive=True):
+              yaml.load(open(f), Loader=L); print("ok", f)
+          PY

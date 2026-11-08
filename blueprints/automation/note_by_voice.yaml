@@ -1,0 +1,72 @@
+blueprint:
+  name: Wall panel — leave a note by voice (clears itself after a day)
+  description: >-
+    Say "leave a note: buy milk" to Assist — on your phone, watch, a voice
+    satellite or a Siri shortcut — and it appears on the wall panel, with who
+    left it when Home Assistant knows the device. The note clears itself after
+    a set time (or when you tap it on the panel and clear the Text helper).
+
+
+    **Create first:** Text helpers "Panel note" (max 255) and "Panel note from".
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/note_by_voice.yaml
+  input:
+    note:
+      name: '"Panel note" Text helper'
+      selector: { entity: { domain: input_text } }
+    note_from:
+      name: '"Panel note from" Text helper (optional)'
+      default: []
+      selector: { entity: { domain: input_text } }
+    keep_for:
+      name: Clear the note after
+      default: { hours: 24 }
+      selector: { duration: {} }
+
+mode: queued
+
+variables:
+  note: !input note
+  note_from: !input note_from
+
+triggers:
+  - trigger: conversation
+    command:
+      - "leave a note {message}"
+      - "note for the wall {message}"
+      - "wall note {message}"
+      - "add a note {message}"
+    id: voice
+  - trigger: state
+    entity_id: !input note
+    for: !input keep_for
+    id: expired
+
+actions:
+  - choose:
+      - conditions: "{{ trigger.id == 'voice' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ note_from | length > 0 }}"
+            then:
+              - action: input_text.set_value
+                target: { entity_id: "{{ note_from }}" }
+                data:
+                  value: "{{ (device_attr(trigger.device_id, 'name') if trigger.device_id else '') or '' }}"
+          - action: input_text.set_value
+            target: { entity_id: "{{ note }}" }
+            data: { value: "{{ (trigger.slots.message | trim)[:255] }}" }
+          - set_conversation_response: "Done — it's on the wall panel."
+      - conditions: "{{ trigger.id == 'expired' and states(note) not in ['', 'unknown', 'unavailable'] }}"
+        sequence:
+          - action: input_text.set_value
+            target: { entity_id: "{{ note }}" }
+            data: { value: "" }
+          - if:
+              - condition: template
+                value_template: "{{ note_from | length > 0 }}"
+            then:
+              - action: input_text.set_value
+                target: { entity_id: "{{ note_from }}" }
+                data: { value: "" }

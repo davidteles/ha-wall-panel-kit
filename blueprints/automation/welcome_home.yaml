@@ -1,0 +1,42 @@
+blueprint:
+  name: Wall panel — welcome home greeting
+  description: >-
+    Remembers who just arrived ("Alex|1730000000") so the wall panel can greet
+    them — "Welcome home, Alex" — for a few minutes. Two people arriving
+    within three minutes are greeted together ("Alex & Sam").
+
+
+    **Create first:** a Text helper, e.g. "Last arrival".
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/welcome_home.yaml
+  input:
+    people:
+      name: People
+      selector: { entity: { domain: person, multiple: true } }
+    target:
+      name: Store in (Text helper)
+      selector: { entity: { domain: input_text } }
+
+mode: queued
+
+variables:
+  target: !input target
+
+triggers:
+  - trigger: state
+    entity_id: !input people
+    to: home
+    not_from: [unknown, unavailable]
+
+actions:
+  - action: input_text.set_value
+    target: { entity_id: "{{ target }}" }
+    data:
+      value: >-
+        {%- set prev = states(target).split('|') -%}
+        {%- set me = trigger.to_state.name.split(' ')[0] -%}
+        {%- if prev | count == 2 and prev[1] | is_number and (now().timestamp() - prev[1] | float) < 180 and me not in prev[0] -%}
+          {{ prev[0].split(' ')[0] }} & {{ me }}
+        {%- else -%}
+          {{ me }}
+        {%- endif -%}|{{ now().timestamp() | int }}

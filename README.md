@@ -50,6 +50,21 @@ Home Assistant 2025.1 or newer, plus these frontend cards from HACS:
 
 Change `my_home.yaml` and run the script again whenever you add a room or device. The output is plain YAML, so you can also keep editing in the dashboard editor — but then re-running the script overwrites your edits.
 
+## Panel features (blueprints)
+
+Small automations that make a wall panel feel alive. Import them, create the helpers, then list the helpers under `panel:` in `my_home.yaml`, and the generator adds the matching cards to Home.
+
+| Blueprint | What it does | Helpers | Import |
+|---|---|---|---|
+| **"Leaving" button** *(script)* | One tap at the door: remembers what's on, turns the house off except the way-out lights, pauses music, lights the outside light if it's dark, starts a countdown | Timer "Leaving" | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fscript%2Fleaving_button.yaml) |
+| **Leaving countdown** | Countdown ends → way-out lights off, alarm armed (you're told if it refused and what's open), outside light off a few minutes later. **"I'm staying" puts every light and speaker back exactly as it was** | — | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fleaving_countdown.yaml) |
+| **Leave a note by voice** | "Leave a note: buy milk" to Assist → shows on the panel, with who left it; clears itself after a day | Text "Panel note" (255), Text "Panel note from" | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fnote_by_voice.yaml) |
+| **Rain soon** | "☔ Rain from 17:40 — take an umbrella" in the attention strip, from your weather's hourly forecast | Text "Rain at" | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Frain_soon.yaml) |
+| **Welcome home** | "Welcome home, Alex 👋" for 10 minutes after someone arrives; "Alex & Sam" when you arrive together | Text "Last arrival" | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fwelcome_home.yaml) |
+| **Admin mode switches itself off** | The kiosk "admin" toggle never stays on by mistake | the admin toggle | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fadmin_timeout.yaml) |
+
+On Home, the Leaving button turns into a live countdown with **I'm staying** and **Arm now** while it runs.
+
 ## `my_home.yaml` reference
 
 ```yaml
@@ -65,6 +80,14 @@ tablet:
   screensaver:                       # optional
     idle_seconds: 180
     photos: media-source://media_source/local/wallpanel
+
+panel:                               # optional → Leaving, note, rain, welcome cards
+  leaving_script: script.leaving
+  leaving_timer: timer.leaving
+  note: input_text.panel_note
+  note_from: input_text.panel_note_from
+  rain_at: input_text.rain_at
+  last_arrival: input_text.last_arrival
 
 energy:                              # optional → adds Energy
   power_now: sensor.home_power

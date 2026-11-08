@@ -1,0 +1,113 @@
+blueprint:
+  name: Wall panel — "Leaving" button
+  description: >-
+    One tap at the front door. It remembers what was on (lights and playing
+    speakers), turns the house off — except the lights you need to get out —
+    pauses the music, lights the outside light if it's dark, and starts a
+    short countdown. Use it with the "Leaving countdown" automation: when the
+    countdown ends the alarm arms and the way-out lights go off; **Cancel puts
+    everything back exactly as it was**.
+
+
+    **Create first:** a Timer helper, e.g. "Leaving".
+  domain: script
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/script/leaving_button.yaml
+  input:
+    lights:
+      name: Lights and switches to turn off now
+      selector: { entity: { domain: [light, switch], multiple: true } }
+    way_out:
+      name: Way-out lights (stay on until the countdown ends)
+      default: []
+      selector: { entity: { domain: [light, switch], multiple: true } }
+    outside:
+      name: Outside light (turned on if it's dark)
+      default: []
+      selector: { entity: { domain: [light, switch] } }
+    speakers:
+      name: Speakers to pause
+      default: []
+      selector: { entity: { domain: media_player, multiple: true } }
+    timer:
+      name: Countdown (Timer helper)
+      selector: { entity: { domain: timer } }
+    duration:
+      name: Countdown length
+      default: "00:01:00"
+      selector: { duration: {} }
+    alarm:
+      name: Alarm (optional)
+      description: The countdown only starts while the alarm is disarmed.
+      default: []
+      selector: { entity: { domain: alarm_control_panel } }
+    scene_id:
+      name: Snapshot scene id
+      default: before_leaving
+      selector: { text: {} }
+
+mode: single
+icon: mdi:exit-run
+
+variables:
+  lights: !input lights
+  way_out: !input way_out
+  outside: !input outside
+  speakers: !input speakers
+  timer: !input timer
+  duration: !input duration
+  alarm: !input alarm
+  scene_id: !input scene_id
+  dark_and_outside_off: "{{ outside | length > 0 and is_state('sun.sun', 'below_horizon') and is_state(outside, 'off') }}"
+  snapshot: >-
+    {{ ((lights + way_out) | select('is_state', 'on') | list)
+       + (speakers | select('is_state', 'playing') | list)
+       + ([outside] if dark_and_outside_off else []) }}
+
+sequence:
+  - alias: Remember what was on, so Cancel can restore it
+    if:
+      - condition: template
+        value_template: "{{ snapshot | count > 0 }}"
+    then:
+      - action: scene.create
+        data:
+          scene_id: "{{ scene_id }}"
+          snapshot_entities: "{{ snapshot }}"
+  - alias: Lights off (not the way out)
+    if:
+      - condition: template
+        value_template: "{{ lights | count > 0 }}"
+    then:
+      - action: homeassistant.turn_off
+        target: { entity_id: "{{ lights }}" }
+        continue_on_error: true
+  - alias: Dark → light the way out
+    if:
+      - condition: template
+        value_template: "{{ dark_and_outside_off }}"
+    then:
+      - action: homeassistant.turn_on
+        target: { entity_id: "{{ outside }}" }
+  - alias: Pause the music
+    if:
+      - condition: template
+        value_template: "{{ speakers | select('is_state', 'playing') | list | count > 0 }}"
+    then:
+      - action: media_player.media_pause
+        target: { entity_id: "{{ speakers | select('is_state', 'playing') | list }}" }
+        continue_on_error: true
+  - if:
+      - condition: template
+        value_template: "{{ alarm | length == 0 or is_state(alarm, 'disarmed') }}"
+    then:
+      - action: timer.start
+        target: { entity_id: "{{ timer }}" }
+        data: { duration: "{{ duration }}" }
+    else:
+      - alias: Alarm already on → no countdown, way-out lights off now
+        if:
+          - condition: template
+            value_template: "{{ (way_out + ([outside] if outside | length > 0 else [])) | count > 0 }}"
+        then:
+          - action: homeassistant.turn_off
+            target: { entity_id: "{{ way_out + ([outside] if outside | length > 0 else []) }}" }
