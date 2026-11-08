@@ -1,0 +1,41 @@
+# Copy to my_home.yaml, fill in your own entity ids, then run:
+#   python tools/render.py
+# Anything marked optional can be removed.
+
+title: Home
+weather: weather.home
+calendar: calendar.family            # optional — shows "Coming up"
+alarm: alarm_control_panel.home      # optional — adds the Security page
+people:                              # optional
+  - person.alex
+  - person.sam
+
+tablet:
+  kiosk: true                        # hide header and sidebar on tablets (needs kiosk-mode)
+  admin_toggle: input_boolean.wall_panel_admin_mode   # optional — while on, the header comes back
+  screensaver:                       # optional (needs wallpanel)
+    idle_seconds: 180
+    photos: media-source://media_source/local/wallpanel
+
+energy:                              # optional — adds the Energy page
+  power_now: sensor.home_power       # current consumption (W)
+  energy_today: sensor.home_energy_today   # optional (kWh)
+
+rooms:
+  - name: Living room
+    icon: mdi:sofa
+    temperature: sensor.living_room_temperature   # optional
+    humidity: sensor.living_room_humidity         # optional
+    lights: [light.living_room_ceiling, light.sofa_lamp]
+    climate: climate.living_room                  # optional
+    media: media_player.living_room               # optional
+    covers: [cover.living_room_blinds]            # optional
+    other: [switch.coffee_machine]                # optional — any extra tiles
+  - name: Kitchen
+    icon: mdi:silverware-fork-knife
+    lights: [light.kitchen]
+  - name: Bedroom
+    icon: mdi:bed
+    temperature: sensor.bedroom_temperature
+    lights: [light.bedroom]
+    covers: [cover.bedroom_blinds]

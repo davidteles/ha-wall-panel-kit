@@ -1,0 +1,18 @@
+# Wall Panel — frosted-glass cards over a photo or gradient background.
+# Works in light and dark mode. Pair it with a view background (see README).
+Wall Panel:
+  ha-card-border-radius: "20px"
+  ha-card-border-width: "1px"
+  ha-card-backdrop-filter: "blur(18px) saturate(150%)"
+  mush-chip-border-radius: "18px"
+  modes:
+    light:
+      ha-card-background: "rgba(255, 255, 255, 0.62)"
+      ha-card-border-color: "rgba(255, 255, 255, 0.55)"
+      ha-card-box-shadow: "0 8px 28px rgba(0, 0, 0, 0.12)"
+      mush-chip-background: "rgba(255, 255, 255, 0.55)"
+    dark:
+      ha-card-background: "rgba(24, 26, 31, 0.48)"
+      ha-card-border-color: "rgba(255, 255, 255, 0.10)"
+      ha-card-box-shadow: "0 8px 28px rgba(0, 0, 0, 0.28)"
+      mush-chip-background: "rgba(255, 255, 255, 0.08)"

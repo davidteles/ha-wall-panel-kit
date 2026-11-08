@@ -1,0 +1,4 @@
+my_home.yaml
+out/
+__pycache__/
+.venv/
