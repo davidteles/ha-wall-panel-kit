@@ -6,6 +6,8 @@ title: Home
 weather: weather.home
 calendar: calendar.family            # optional — shows "Coming up"
 alarm: alarm_control_panel.home      # optional — adds the Security page
+ignore_label: ignore                 # optional — label id of things the attention strip should skip
+                                     # (put it on a device or entity: a car's windows, a fridge door…)
 people:                              # optional
   - person.alex
   - person.sam

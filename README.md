@@ -105,6 +105,8 @@ rooms:
     other: [switch.coffee_machine]
 ```
 
+**Ignoring things:** create a label (Settings → Areas, labels & zones → Labels), e.g. *Ignore*, put it on any device or entity the attention strip should never mention — a car's window sensors, a fridge door, a tablet's battery — and set `ignore_label: ignore` (the label's id) in `my_home.yaml`.
+
 Room names must be unique and can't be *Home*, *Rooms*, *Security* or *Energy*.
 
 > **Admin toggle:** create it under Settings → Devices & services → Helpers → *Toggle*. Turn it on from another device when you need the header on the tablet to edit.
