@@ -115,6 +115,17 @@ Room names must be unique and can't be *Home*, *Rooms*, *Security* or *Energy*.
 
 The rules behind the layout — what goes on Home, why phones never get kiosk mode, how colour is used, which actions ask for confirmation — are in [docs/design.md](docs/design.md).
 
+## Kiosk Satellite tablets
+
+For a tablet running [Kiosk Satellite](https://kiosksatellite.com). Helpers to create and an example *Panel settings* page: [docs/kiosk-satellite.md](docs/kiosk-satellite.md).
+
+| Blueprint | What it does | Import |
+|---|---|---|
+| **Keep the tablet awake while it matters** | Screen held on while the alarm counts down, a Leaving timer runs or the voice assistant talks; released 20 s later, only if it held it | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fkiosk_satellite%2Fkeep_awake.yaml) |
+| **Keep a countdown visible over Now Playing** | Closes the full-screen player while a countdown runs, so *Cancel* stays reachable | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fkiosk_satellite%2Fcountdown_over_now_playing.yaml) |
+| **Kiosk mode policy** | A dropdown: Always on, Always off, or Auto (back on by itself after a few minutes) | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fkiosk_satellite%2Fkiosk_mode_policy.yaml) |
+| **Screensaver style, away and guest mode** | One dropdown (Auto / No photos / Photos day and night / Screen off); black and off when nobody is home; clock only on the guest page | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fkiosk_satellite%2Fscreensaver_style.yaml) |
+
 ## Roadmap
 
 - **Phase 1 (now):** generator for tablet + phone from `my_home.yaml`.

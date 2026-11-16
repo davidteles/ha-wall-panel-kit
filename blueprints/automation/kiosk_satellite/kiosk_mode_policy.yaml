@@ -1,0 +1,56 @@
+blueprint:
+  name: Kiosk Satellite - kiosk mode policy (Auto / Always on / Always off)
+  description: >-
+    A dropdown on your dashboard decides Kiosk Satellite's kiosk mode:
+    **Always on**, **Always off**, or **Auto** (if someone leaves kiosk mode, it
+    comes back on by itself after a few minutes). Create a Dropdown helper with
+    exactly these three options.
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/kiosk_satellite/kiosk_mode_policy.yaml
+  input:
+    kiosk_switch:
+      name: Kiosk Satellite kiosk mode switch
+      selector: { entity: { domain: switch } }
+    policy:
+      name: Dropdown helper with the options "Auto", "Always on", "Always off"
+      selector: { entity: { domain: input_select } }
+    minutes:
+      name: Auto turns it back on after
+      default: 10
+      selector: { number: { min: 1, max: 120, unit_of_measurement: min } }
+
+mode: restart
+
+variables:
+  policy: !input policy
+  minutes: !input minutes
+
+triggers:
+  - trigger: state
+    entity_id: !input kiosk_switch
+    to: "off"
+    id: "off"
+  - trigger: state
+    entity_id: !input policy
+    id: policy
+  - trigger: homeassistant
+    event: start
+    id: policy
+
+actions:
+  - choose:
+      - conditions: "{{ states(policy) == 'Always off' }}"
+        sequence:
+          - action: switch.turn_off
+            target: { entity_id: !input kiosk_switch }
+      - conditions: "{{ states(policy) == 'Always on' or (trigger.id == 'policy' and states(policy) == 'Auto') }}"
+        sequence:
+          - action: switch.turn_on
+            target: { entity_id: !input kiosk_switch }
+      - conditions: "{{ trigger.id == 'off' and states(policy) == 'Auto' }}"
+        sequence:
+          - delay: { minutes: "{{ minutes | int }}" }
+          - condition: template
+            value_template: "{{ states(policy) == 'Auto' }}"
+          - action: switch.turn_on
+            target: { entity_id: !input kiosk_switch }
