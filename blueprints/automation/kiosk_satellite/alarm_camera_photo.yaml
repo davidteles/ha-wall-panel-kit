@@ -3,7 +3,8 @@ blueprint:
   description: >-
     When the alarm triggers, the tablet takes a photo with its front camera and
     your phones get it as a time-sensitive notification. A copy can be saved in
-    a media folder. Uses the camera and snapshot button that Kiosk Satellite
+    a media folder (the phones get that saved file: press and hold the
+    notification to see it). Uses the camera and snapshot button that Kiosk Satellite
     adds when its camera is turned on.
   domain: automation
   source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/kiosk_satellite/alarm_camera_photo.yaml
@@ -24,9 +25,12 @@ blueprint:
       description: One notify action per line, e.g. notify.mobile_app_my_phone.
       selector: { text: { multiple: true } }
     folder:
-      name: Folder to save a copy (optional)
-      description: E.g. /media/alarm_photos. Leave empty to not keep a copy.
-      default: ""
+      name: Folder for the photos
+      description: >-
+        A folder under /media. The phones get the saved file, which iPhones
+        show reliably; with an empty folder the notification uses the live
+        camera link instead, which does not always attach.
+      default: /media/alarm_photos
       selector: { text: {} }
 
 mode: single
@@ -36,6 +40,9 @@ variables:
   snapshot_button: !input snapshot_button
   notify_actions: !input notify_actions
   folder: !input folder
+  photo: "{{ folder.rstrip('/') }}/alarm_{{ now().strftime('%Y-%m-%d_%H-%M-%S') }}.jpg"
+  image: >-
+    {{ '/media/local/' ~ photo[7:] if folder.startswith('/media/') else '/api/camera_proxy/' ~ camera }}
 
 triggers:
   - trigger: state
@@ -58,8 +65,9 @@ actions:
       - action: camera.snapshot
         target: { entity_id: !input camera }
         data:
-          filename: "{{ folder.rstrip('/') }}/alarm_{{ now().strftime('%Y-%m-%d_%H-%M-%S') }}.jpg"
+          filename: "{{ photo }}"
         continue_on_error: true
+      - delay: { seconds: 1 }
   - repeat:
       for_each: "{{ notify_actions }}"
       sequence:
@@ -67,8 +75,8 @@ actions:
           continue_on_error: true
           data:
             title: "📷 Alarm: tablet camera"
-            message: "Photo taken at {{ now().strftime('%H:%M:%S') }} when the alarm went off."
+            message: "Photo taken at {{ now().strftime('%H:%M:%S') }} when the alarm went off. Press and hold to see it."
             data:
-              image: "/api/camera_proxy/{{ camera }}"
+              image: "{{ image }}"
               tag: alarm-photo
               push: { interruption-level: time-sensitive }
