@@ -1,0 +1,127 @@
+blueprint:
+  name: Kiosk Satellite - tablet announcement
+  description: >-
+    A script you call from any automation to put a banner on the tablet (with a
+    chime) and, if you ask, read it out loud. It stays quiet when nobody is home
+    or during quiet hours, unless you call it with "force" (e.g. the alarm
+    asking for the code). Call it with title, message and optionally icon,
+    speak, spoken, duration and force.
+  domain: script
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/script/kiosk_satellite/tablet_announcement.yaml
+  input:
+    notification_action:
+      name: Tablet notification action
+      description: >-
+        The ESPHome action Kiosk Satellite creates for the tablet, e.g.
+        esphome.my_tablet_notification (Developer tools → Actions).
+      selector: { text: {} }
+    volume:
+      name: Chime volume
+      default: 0.6
+      selector: { number: { min: 0, max: 1, step: 0.05 } }
+    speaker:
+      name: Tablet media player for speech (optional)
+      default: []
+      selector: { entity: { domain: media_player, multiple: true } }
+    tts_engine:
+      name: Text-to-speech engine (optional)
+      description: E.g. tts.piper. Needed only for speech.
+      default: ""
+      selector: { text: {} }
+    tts_language:
+      name: Speech language
+      default: en_GB
+      selector: { text: {} }
+    tts_voice:
+      name: Speech voice (optional)
+      description: E.g. en_GB-cori-high for Piper. Leave empty for the engine's default.
+      default: ""
+      selector: { text: {} }
+    home_zone:
+      name: Home zone (skip when nobody is home)
+      default: zone.home
+      selector: { entity: { domain: zone } }
+    quiet_start:
+      name: Quiet hours start
+      default: "23:00:00"
+      selector: { time: {} }
+    quiet_end:
+      name: Quiet hours end
+      default: "07:00:00"
+      selector: { time: {} }
+
+mode: queued
+max: 5
+
+fields:
+  title:
+    name: Title
+    selector: { text: {} }
+  message:
+    name: Message
+    required: true
+    selector: { text: {} }
+  icon:
+    name: Icon
+    default: mdi:bell
+    selector: { icon: {} }
+  speak:
+    name: Also read it out
+    default: false
+    selector: { boolean: {} }
+  spoken:
+    name: What to say (defaults to the message)
+    selector: { text: {} }
+  duration:
+    name: Seconds on screen
+    default: 30
+    selector: { number: { min: 5, max: 600 } }
+  force:
+    name: Ignore the home and quiet-hours rules
+    default: false
+    selector: { boolean: {} }
+
+variables:
+  notification_action: !input notification_action
+  volume: !input volume
+  speaker: !input speaker
+  tts_engine: !input tts_engine
+  tts_language: !input tts_language
+  tts_voice: !input tts_voice
+  home_zone: !input home_zone
+  quiet_start: !input quiet_start
+  quiet_end: !input quiet_end
+
+sequence:
+  - condition: template
+    value_template: >-
+      {% set t = now().strftime('%H:%M:%S') %}
+      {% set quiet = (t >= quiet_start or t < quiet_end) if quiet_start > quiet_end
+                     else (quiet_start <= t < quiet_end) %}
+      {{ force | default(false) or ((states(home_zone) | int(0)) > 0 and not quiet) }}
+  # Kiosk Satellite's notification action needs every field, even the empty ones.
+  - action: "{{ notification_action }}"
+    continue_on_error: true
+    data:
+      title: "{{ title | default('') }}"
+      message: "{{ message | default('') }}"
+      icon: "{{ icon | default('mdi:bell') }}"
+      duration: "{{ duration | default(30) | int }}"
+      type: info
+      chime: true
+      chime_file: ""
+      volume: "{{ volume }}"
+      scale: 1
+      image: ""
+  - if:
+      - condition: template
+        value_template: "{{ speak | default(false) and speaker | count > 0 and tts_engine != '' }}"
+    then:
+      - action: media_player.play_media
+        continue_on_error: true
+        target: { entity_id: "{{ speaker }}" }
+        data:
+          media_content_type: music
+          announce: true
+          media_content_id: >-
+            media-source://tts/{{ tts_engine }}?message={{ (spoken | default(message, true)) | urlencode }}&language={{ tts_language }}{{ '&voice=' ~ tts_voice if tts_voice else '' }}

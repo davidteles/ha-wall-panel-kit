@@ -17,6 +17,20 @@ Extras for a wall tablet running [Kiosk Satellite](https://kiosksatellite.com) w
 - **Keep a countdown visible over Now Playing:** closes the full-screen player while a countdown runs, so *Cancel* stays reachable.
 - **Kiosk mode policy:** a dropdown decides kiosk mode — Always on, Always off, or Auto (back on by itself a few minutes after someone leaves it).
 - **Screensaver style, away and guest mode:** one dropdown for the screensaver; black and off when nobody is home; clock only (no family photos) while the guest page is open.
+- **Tablet announcement** (script): call it from any automation with a title and message to show a banner with a chime; add `speak: true` to read it out (needs a text-to-speech engine, e.g. Piper). Skipped when nobody is home or in quiet hours unless you pass `force: true`. Kiosk Satellite's notification action needs every field, even empty ones — the script sends them all.
+- **Camera photo when the alarm goes off:** turn on the tablet camera in Kiosk Satellite first; the photo goes to your phones as a time-sensitive notification, and a copy can be kept in a media folder.
+- **Clean the screen** (script): lockdown mode for a minute; seven fast taps still exit early.
+
+Example call from an automation:
+
+```yaml
+- action: script.tablet_announcement   # the name you gave the script
+  data:
+    title: Washing machine
+    message: The laundry is done.
+    icon: mdi:washing-machine
+    speak: true
+```
 
 Import buttons are in the main README.
 

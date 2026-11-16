@@ -1,0 +1,74 @@
+blueprint:
+  name: Kiosk Satellite - tablet camera photo when the alarm goes off
+  description: >-
+    When the alarm triggers, the tablet takes a photo with its front camera and
+    your phones get it as a time-sensitive notification. A copy can be saved in
+    a media folder. Uses the camera and snapshot button that Kiosk Satellite
+    adds when its camera is turned on.
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/kiosk_satellite/alarm_camera_photo.yaml
+  input:
+    alarm:
+      name: Alarm panel
+      selector: { entity: { domain: alarm_control_panel } }
+    camera:
+      name: Tablet camera
+      selector: { entity: { domain: camera } }
+    snapshot_button:
+      name: Take-snapshot button (optional)
+      description: Pressing it first makes sure the photo is fresh.
+      default: []
+      selector: { entity: { domain: button, multiple: true } }
+    notify_actions:
+      name: Phones to notify
+      description: One notify action per line, e.g. notify.mobile_app_my_phone.
+      selector: { text: { multiple: true } }
+    folder:
+      name: Folder to save a copy (optional)
+      description: E.g. /media/alarm_photos. Leave empty to not keep a copy.
+      default: ""
+      selector: { text: {} }
+
+mode: single
+
+variables:
+  camera: !input camera
+  snapshot_button: !input snapshot_button
+  notify_actions: !input notify_actions
+  folder: !input folder
+
+triggers:
+  - trigger: state
+    entity_id: !input alarm
+    to: triggered
+
+actions:
+  - if:
+      - condition: template
+        value_template: "{{ snapshot_button | count > 0 }}"
+    then:
+      - action: button.press
+        target: { entity_id: !input snapshot_button }
+        continue_on_error: true
+      - delay: { seconds: 3 }
+  - if:
+      - condition: template
+        value_template: "{{ folder != '' }}"
+    then:
+      - action: camera.snapshot
+        target: { entity_id: !input camera }
+        data:
+          filename: "{{ folder.rstrip('/') }}/alarm_{{ now().strftime('%Y-%m-%d_%H-%M-%S') }}.jpg"
+        continue_on_error: true
+  - repeat:
+      for_each: "{{ notify_actions }}"
+      sequence:
+        - action: "{{ repeat.item }}"
+          continue_on_error: true
+          data:
+            title: "📷 Alarm: tablet camera"
+            message: "Photo taken at {{ now().strftime('%H:%M:%S') }} when the alarm went off."
+            data:
+              image: "/api/camera_proxy/{{ camera }}"
+              tag: alarm-photo
+              push: { interruption-level: time-sensitive }
