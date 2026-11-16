@@ -1,0 +1,43 @@
+blueprint:
+  name: Kiosk Satellite - keep a countdown visible over Now Playing
+  description: >-
+    When a countdown (e.g. Leaving) starts while music plays, Kiosk Satellite's
+    full-screen Now Playing can cover it, so you can't press Cancel. This closes
+    the overlays while the timer runs, and once more a few seconds later in case
+    Now Playing comes back when the music pauses.
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/kiosk_satellite/countdown_over_now_playing.yaml
+  input:
+    timer:
+      name: Countdown timer
+      selector: { entity: { domain: timer } }
+    close_overlays:
+      name: Kiosk Satellite "Close overlays" button
+      selector: { entity: { domain: button } }
+    now_playing:
+      name: Kiosk Satellite "Now Playing" switch (optional)
+      default: []
+      selector: { entity: { domain: switch, multiple: true } }
+
+mode: restart
+
+triggers:
+  - trigger: state
+    entity_id: !input timer
+    to: active
+  - trigger: state
+    entity_id: !input now_playing
+    to: "on"
+
+conditions:
+  - condition: state
+    entity_id: !input timer
+    state: active
+
+actions:
+  - delay: { seconds: 1 }
+  - action: button.press
+    target: { entity_id: !input close_overlays }
+  - delay: { seconds: 3 }
+  - action: button.press
+    target: { entity_id: !input close_overlays }

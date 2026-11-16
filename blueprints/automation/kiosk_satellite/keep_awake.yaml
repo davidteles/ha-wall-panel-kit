@@ -1,0 +1,89 @@
+blueprint:
+  name: Kiosk Satellite - keep the tablet awake while it matters
+  description: >-
+    Holds the tablet's screen on (Kiosk Satellite "Hold mode") while the alarm
+    counts down, a Leaving timer runs or the voice assistant is talking, so the
+    screensaver or screen-off never hides what you need. It lets go 20 seconds
+    after everything is over, and only if it was this automation that held it
+    (a manual hold is left alone).
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/kiosk_satellite/keep_awake.yaml
+  input:
+    hold_switch:
+      name: Kiosk Satellite hold mode switch
+      selector: { entity: { domain: switch } }
+    screen_light:
+      name: Kiosk Satellite screen light (optional, wakes the screen)
+      default: []
+      selector: { entity: { domain: light, multiple: true } }
+    held_flag:
+      name: Toggle helper that remembers "held by this automation"
+      description: Create a Toggle helper, e.g. "Tablet held by automation".
+      selector: { entity: { domain: input_boolean } }
+    alarm:
+      name: Alarm panel (optional)
+      default: []
+      selector: { entity: { domain: alarm_control_panel, multiple: true } }
+    timers:
+      name: Countdown timers, e.g. Leaving (optional)
+      default: []
+      selector: { entity: { domain: timer, multiple: true } }
+    satellites:
+      name: Voice satellites (optional)
+      default: []
+      selector: { entity: { domain: assist_satellite, multiple: true } }
+
+mode: restart
+
+variables:
+  screen_light: !input screen_light
+  alarm: !input alarm
+  timers: !input timers
+  satellites: !input satellites
+  busy_template: >-
+    {{ (alarm | select('is_state', ['pending', 'arming', 'triggered']) | list | count) > 0
+       or (timers | select('is_state', 'active') | list | count) > 0
+       or (satellites | select('is_state', ['listening', 'processing', 'responding']) | list | count) > 0 }}
+
+triggers:
+  - trigger: state
+    entity_id: !input alarm
+  - trigger: state
+    entity_id: !input timers
+  - trigger: state
+    entity_id: !input satellites
+
+actions:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ busy_template }}"
+        sequence:
+          - action: input_boolean.turn_on
+            target: { entity_id: !input held_flag }
+          - action: switch.turn_on
+            target: { entity_id: !input hold_switch }
+            continue_on_error: true
+          - if:
+              - condition: template
+                value_template: "{{ screen_light | count > 0 }}"
+            then:
+              - action: light.turn_on
+                target: { entity_id: !input screen_light }
+                continue_on_error: true
+      - conditions:
+          - condition: state
+            entity_id: !input held_flag
+            state: "on"
+        sequence:
+          - delay: { seconds: 20 }
+          - condition: template
+            value_template: >-
+              {{ not ((alarm | select('is_state', ['pending', 'arming', 'triggered']) | list | count) > 0
+                 or (timers | select('is_state', 'active') | list | count) > 0
+                 or (satellites | select('is_state', ['listening', 'processing', 'responding']) | list | count) > 0) }}
+          - action: switch.turn_off
+            target: { entity_id: !input hold_switch }
+            continue_on_error: true
+          - action: input_boolean.turn_off
+            target: { entity_id: !input held_flag }

@@ -1,0 +1,140 @@
+blueprint:
+  name: Kiosk Satellite - screensaver style, away and guest mode
+  description: >-
+    One dropdown chooses how the screensaver behaves, and the house adjusts it:
+
+
+    - **Auto:** photos by day, your night screensaver at night (Kiosk Satellite's own schedule).
+
+    - **No photos:** clock only, all day.
+
+    - **Photos day and night:** photos all the time.
+
+    - **Screen off:** black screensaver.
+
+
+    When **nobody is home** the screen goes black and off. When the tablet shows
+    your **guest page** (e.g. a babysitter page), only the clock shows, never
+    family photos. Create a Dropdown helper with exactly those four options.
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/kiosk_satellite/screensaver_style.yaml
+  input:
+    style:
+      name: Dropdown helper with "Auto", "No photos", "Photos day and night", "Screen off"
+      selector: { entity: { domain: input_select } }
+    schedule_switch:
+      name: Kiosk Satellite screensaver schedule switch
+      selector: { entity: { domain: switch } }
+    mode_select:
+      name: Kiosk Satellite screensaver mode select
+      selector: { entity: { domain: select } }
+    photos_option:
+      name: The mode option that shows your photos
+      default: Home Assistant Media
+      selector: { text: {} }
+    screen_light:
+      name: Kiosk Satellite screen light
+      selector: { entity: { domain: light } }
+    home_zone:
+      name: Home zone (counts people at home)
+      default: zone.home
+      selector: { entity: { domain: zone } }
+    away_minutes:
+      name: Nobody home for
+      default: 3
+      selector: { number: { min: 0, max: 60, unit_of_measurement: min } }
+    current_page:
+      name: Kiosk Satellite "current page" sensor (optional, for the guest page)
+      default: ""
+      selector: { text: {} }
+    guest_path:
+      name: Part of the guest page's address
+      default: /guest
+      selector: { text: {} }
+
+mode: restart
+
+trigger_variables:
+  page: !input current_page
+  guest_path: !input guest_path
+
+variables:
+  style: !input style
+  zone_entity: !input home_zone
+  page: !input current_page
+  guest_path: !input guest_path
+  photos_option: !input photos_option
+
+triggers:
+  - trigger: state
+    entity_id: !input style
+  - trigger: numeric_state
+    entity_id: !input home_zone
+    below: 1
+    for: { minutes: !input away_minutes }
+  - trigger: numeric_state
+    entity_id: !input home_zone
+    above: 0
+  - trigger: homeassistant
+    event: start
+  - trigger: template
+    value_template: "{{ page != '' and guest_path in states(page) }}"
+  - trigger: template
+    value_template: "{{ page != '' and guest_path not in states(page) and states(page) not in ['unknown', 'unavailable'] }}"
+
+actions:
+  - variables:
+      away: "{{ states(zone_entity) | int(1) == 0 }}"
+      guest: "{{ page != '' and guest_path in states(page) }}"
+      chosen: "{{ states(style) }}"
+  - choose:
+      - conditions: "{{ guest }}"
+        sequence:
+          - action: switch.turn_off
+            target: { entity_id: !input schedule_switch }
+          - action: select.select_option
+            target: { entity_id: !input mode_select }
+            data: { option: Clock }
+            continue_on_error: true
+      - conditions: "{{ away }}"
+        sequence:
+          - action: switch.turn_off
+            target: { entity_id: !input schedule_switch }
+          - action: select.select_option
+            target: { entity_id: !input mode_select }
+            data: { option: Black }
+            continue_on_error: true
+          - action: light.turn_off
+            target: { entity_id: !input screen_light }
+            continue_on_error: true
+      - conditions: "{{ chosen == 'No photos' }}"
+        sequence:
+          - action: switch.turn_off
+            target: { entity_id: !input schedule_switch }
+          - action: select.select_option
+            target: { entity_id: !input mode_select }
+            data: { option: Clock }
+            continue_on_error: true
+      - conditions: "{{ chosen == 'Photos day and night' }}"
+        sequence:
+          - action: switch.turn_off
+            target: { entity_id: !input schedule_switch }
+          - action: select.select_option
+            target: { entity_id: !input mode_select }
+            data: { option: "{{ photos_option }}" }
+            continue_on_error: true
+      - conditions: "{{ chosen == 'Screen off' }}"
+        sequence:
+          - action: switch.turn_off
+            target: { entity_id: !input schedule_switch }
+          - action: select.select_option
+            target: { entity_id: !input mode_select }
+            data: { option: Black }
+            continue_on_error: true
+    default:
+      - action: select.select_option
+        target: { entity_id: !input mode_select }
+        data: { option: "{{ photos_option }}" }
+        continue_on_error: true
+      - action: switch.turn_on
+        target: { entity_id: !input schedule_switch }
