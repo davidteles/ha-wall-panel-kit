@@ -181,6 +181,29 @@ def lights_summary(home: dict) -> dict:
     }
 
 
+def inside_range(home: dict) -> list[dict]:
+    """'21–23° inside' from the rooms' temperature sensors (lowest–highest), when there are two or more."""
+    sensors = [r["temperature"] for r in home["rooms"] if r.get("temperature")]
+    if len(sensors) < 2:
+        return []
+    values = (
+        f"{{%- set t = {jinja_list(sensors)} | map('states') | select('is_number') | map('float') | list -%}}"
+    )
+    return [{
+        "type": "custom:mushroom-template-card",
+        "icon": "mdi:home-thermometer",
+        "color": "orange",
+        "primary": (
+            values
+            + "{%- if t | count == 0 -%}—{%- elif (t | min | round(0)) == (t | max | round(0)) -%}"
+            "{{ t | min | round(0) | int }}° inside"
+            "{%- else -%}{{ t | min | round(0) | int }}–{{ t | max | round(0) | int }}° inside{%- endif -%}"
+        ),
+        "secondary": f"Lowest and highest of {len(sensors)} rooms",
+        "grid_options": {"columns": 6},
+    }]
+
+
 def home_sections(home: dict, phone: bool) -> list[dict]:
     weather = {
         "type": "custom:clock-weather-card",
@@ -190,7 +213,7 @@ def home_sections(home: dict, phone: bool) -> list[dict]:
     }
     if phone:
         weather["hide_clock"] = True
-    first = [weather] + panel_cards(home) + [alert_strip(home), lights_summary(home)]
+    first = [weather] + inside_range(home) + panel_cards(home) + [alert_strip(home), lights_summary(home)]
     if home.get("alarm"):
         first.append(tile(home["alarm"], 6, name="Alarm"))
     sections = [{"type": "grid", "cards": first}]

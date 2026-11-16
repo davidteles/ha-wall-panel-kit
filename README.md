@@ -11,7 +11,7 @@ my_home.yaml  ──►  python tools/render.py  ──►  out/tablet.yaml   (w
 
 | Page | Tablet | Phone |
 |---|---|---|
-| **Home** | Clock + weather, attention strip, "N lights on — tap to turn all off", alarm, people, rooms, calendar | Same cards, no big clock, 3-day forecast |
+| **Home** | Clock + weather, "21–23° inside" (lowest–highest of your rooms' temperature sensors), attention strip, "N lights on — tap to turn all off", alarm, people, rooms, calendar | Same cards, no big clock, 3-day forecast |
 | **Rooms** | One tile per room, with its temperature | Same |
 | **Each room** | Temperature, humidity, lights (with brightness), climate, blinds, media, extras | Same, one column |
 | **Security** | Alarm with arm/disarm modes (if you have an alarm) | Same |
