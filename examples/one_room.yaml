@@ -1,0 +1,12 @@
+# The smallest working config: one room, no extras.
+#   python tools/render.py examples/one_room.yaml
+# Replace the entity ids with yours (Settings → Entities). Grow it from here
+# with the fuller my_home.example.yaml.
+
+title: Home
+weather: weather.home
+
+rooms:
+  - name: Living room
+    icon: mdi:sofa
+    lights: [light.living_room]

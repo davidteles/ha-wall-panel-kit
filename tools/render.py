@@ -3,8 +3,11 @@
 
     python tools/render.py                      # reads my_home.yaml
     python tools/render.py my_home.example.yaml # try it with the example
+    python tools/render.py examples/one_room.yaml --out out-test
 
-Writes out/tablet.yaml and out/phone.yaml. Paste each into a new dashboard:
+Writes out/tablet.yaml and out/phone.yaml (or into --out DIR). If they are
+already there, the old ones are moved to out/previous/ first, so the last
+version is always one copy away. Paste each into a new dashboard:
 Settings → Dashboards → Add dashboard → open it → ⋮ → Edit → ⋮ → Raw configuration editor.
 
 Both layouts share the same cards; only the frame differs:
@@ -358,16 +361,60 @@ def phone(home: dict) -> dict:
 
 # ---------------------------------------------------------------- main
 
-def validate(home: dict) -> None:
-    missing = [k for k in ("title", "weather", "rooms") if not home.get(k)]
-    if missing:
-        sys.exit(f"my_home.yaml is missing: {', '.join(missing)}")
-    names = [slug(r.get("name", "")) for r in home["rooms"]]
-    if "" in names or len(set(names)) != len(names):
-        sys.exit("Every room needs a unique name.")
-    reserved = {"home", "rooms", "security", "energy"} & set(names)
-    if reserved:
-        sys.exit(f"Room names clash with page names: {', '.join(sorted(reserved))}")
+ENTITY = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
+SINGLE = ("weather", "calendar", "alarm")
+ROOM_SINGLE = ("temperature", "humidity", "climate", "media")
+ROOM_LISTS = ("lights", "covers", "other")
+RESERVED = {"home", "rooms", "security", "energy"}
+
+
+def check(home) -> list[str]:
+    """Every problem in the config, each naming the key it is about."""
+    if not isinstance(home, dict):
+        return ["the file must be a YAML mapping (title:, weather:, rooms: …)"]
+    errors = [f"'{k}' is missing" for k in ("title", "weather", "rooms") if not home.get(k)]
+
+    def entity(where: str, value) -> None:
+        if not isinstance(value, str) or not ENTITY.match(value):
+            errors.append(f"{where}: {value!r} is not an entity id (like light.kitchen)")
+
+    for key in SINGLE:
+        if home.get(key):
+            entity(key, home[key])
+    for i, person in enumerate(home.get("people") or []):
+        entity(f"people[{i}]", person)
+    rooms = home.get("rooms") or []
+    if not isinstance(rooms, list):
+        return errors + ["'rooms' must be a list (each item starts with '- name:')"]
+    seen: dict[str, str] = {}
+    for i, room in enumerate(rooms):
+        if not isinstance(room, dict) or not room.get("name"):
+            errors.append(f"rooms[{i}]: every room needs a 'name'")
+            continue
+        where = f"rooms[{i}] ({room['name']})"
+        path = slug(str(room["name"]))
+        if path in RESERVED:
+            errors.append(f"{where}: the name clashes with the '{path}' page; pick another")
+        elif path in seen:
+            errors.append(f"{where}: same page address as {seen[path]}; room names must differ")
+        seen.setdefault(path, where)
+        for key in ROOM_SINGLE:
+            if room.get(key):
+                entity(f"{where} {key}", room[key])
+        for key in ROOM_LISTS:
+            items = room.get(key) or []
+            if not isinstance(items, list):
+                errors.append(f"{where} {key}: must be a list, e.g. [{key[:-1] if key != 'other' else 'switch'}.example]")
+                continue
+            for j, item in enumerate(items):
+                entity(f"{where} {key}[{j}]", item)
+    return errors
+
+
+def validate(home) -> None:
+    errors = check(home)
+    if errors:
+        sys.exit("Please fix my_home.yaml:\n  - " + "\n  - ".join(errors))
 
 
 class Dumper(yaml.SafeDumper):
@@ -383,18 +430,37 @@ def _str(dumper, value):
 Dumper.add_representer(str, _str)
 
 
-def main() -> None:
-    source = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "my_home.yaml"
+def write(home: dict, out: Path) -> list[Path]:
+    """Write both dashboards into `out`, moving any previous ones to out/previous/."""
+    out.mkdir(parents=True, exist_ok=True)
+    written = []
+    for name, build in (("tablet", tablet), ("phone", phone)):
+        path = out / f"{name}.yaml"
+        if path.exists():
+            (out / "previous").mkdir(exist_ok=True)
+            path.replace(out / "previous" / path.name)
+        path.write_text(yaml.dump(build(home), Dumper=Dumper, sort_keys=False, allow_unicode=True, width=120))
+        written.append(path)
+    return written
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = list(sys.argv[1:] if argv is None else argv)
+    out = ROOT / "out"
+    if "--out" in args:
+        i = args.index("--out")
+        out = Path(args[i + 1]).resolve()
+        del args[i:i + 2]
+    source = Path(args[0]) if args else ROOT / "my_home.yaml"
     if not source.exists():
         sys.exit(f"{source} not found — copy my_home.example.yaml to my_home.yaml first.")
     home = yaml.safe_load(source.read_text())
     validate(home)
-    out = ROOT / "out"
-    out.mkdir(exist_ok=True)
-    for name, build in (("tablet", tablet), ("phone", phone)):
-        path = out / f"{name}.yaml"
-        path.write_text(yaml.dump(build(home), Dumper=Dumper, sort_keys=False, allow_unicode=True, width=120))
-        print(f"wrote {path.relative_to(ROOT)}")
+    had_previous = (out / "tablet.yaml").exists()
+    for path in write(home, out):
+        print(f"wrote {path}")
+    if had_previous:
+        print(f"the previous version is in {out / 'previous'} (paste it back to undo)")
 
 
 if __name__ == "__main__":
