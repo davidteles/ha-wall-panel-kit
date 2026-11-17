@@ -36,7 +36,7 @@ Home Assistant 2025.1 or newer, plus these frontend cards from HACS:
 ## Quick start
 
 1. **Get the kit** — download this repository (Code → Download ZIP) or `git clone` it.
-2. **Describe your home** — copy `my_home.example.yaml` to `my_home.yaml` and fill in your entity ids. Find them in Settings → Devices & services → Entities. Remove any optional line you don't need.
+2. **Describe your home** — copy `my_home.example.yaml` to `my_home.yaml` and fill in your entity ids. **Starting out?** Copy [`examples/one_room.yaml`](examples/one_room.yaml) instead: a title, a weather entity and one room with one light is all it needs, and you can grow it later. Find them in Settings → Devices & services → Entities. Remove any optional line you don't need.
 3. **Build** (Python 3.10+):
    ```bash
    pip install -r tools/requirements.txt
@@ -48,7 +48,12 @@ Home Assistant 2025.1 or newer, plus these frontend cards from HACS:
 5. **Add the theme** — copy `themes/wall-panel.yaml` into your `themes` folder ([how](https://www.home-assistant.io/integrations/frontend/#defining-themes)), reload themes and pick **Wall Panel** in your profile, or on the tablet only.
 6. **On each phone**, choose the Phone dashboard in the companion app: Profile → Dashboard.
 
-Change `my_home.yaml` and run the script again whenever you add a room or device. The output is plain YAML, so you can also keep editing in the dashboard editor — but then re-running the script overwrites your edits.
+### Changing it later, and undoing a change
+
+- **`my_home.yaml` is the source of truth.** Change it and run the script again whenever you add a room or device, then paste the new output over the old dashboard.
+- **Edits made in the dashboard editor are not kept** when you paste new output. Either keep your changes in `my_home.yaml`, or stop regenerating that dashboard and edit it by hand from then on.
+- **Each run keeps the previous output** in `out/previous/`. To undo, paste `out/previous/tablet.yaml` (or `phone.yaml`) back into the Raw configuration editor. To try something without touching `out/`, use `python tools/render.py my_home.yaml --out out-test`.
+- **Mistakes are named.** If something in `my_home.yaml` is wrong, the script lists every problem with where it is, e.g. `rooms[1] (Kitchen) lights[0]: 'kitchen lamp' is not an entity id`, and writes nothing.
 
 ## Panel features (blueprints)
 

@@ -33,3 +33,7 @@ jobs:
         run: python -c "import yaml; yaml.safe_load(open('themes/wall-panel.yaml')); print('theme ok')"
       - name: Check every blueprint
         run: python tools/check_blueprints.py
+      - name: Generator tests (both outputs, navigation, bad input, regeneration)
+        run: |
+          pip install pytest
+          pytest -q tests
