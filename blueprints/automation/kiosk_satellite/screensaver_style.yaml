@@ -43,6 +43,13 @@ blueprint:
       name: Nobody home for
       default: 3
       selector: { number: { min: 0, max: 60, unit_of_measurement: min } }
+    guest_switch:
+      name: Guest at home switch (optional)
+      description: >-
+        A toggle (e.g. an input_boolean "Guest at home") that is on while someone
+        stays in the house without you. While it is on, an empty house does not count as away (the screen stays on with your normal style).
+      default: []
+      selector: { entity: { domain: [input_boolean, switch, binary_sensor] } }
     current_page:
       name: Kiosk Satellite "current page" sensor (optional, for the guest page)
       default: ""
@@ -64,6 +71,8 @@ variables:
   page: !input current_page
   guest_path: !input guest_path
   photos_option: !input photos_option
+  guest_switch: !input guest_switch
+  guest_home: "{{ guest_switch not in ['', none, []] and is_state(guest_switch, 'on') }}"
 
 triggers:
   - trigger: state
@@ -77,6 +86,9 @@ triggers:
     above: 0
   - trigger: homeassistant
     event: start
+  - trigger: state
+    entity_id: !input guest_switch
+    to: ["on", "off"]
   - trigger: template
     value_template: "{{ page != '' and guest_path in states(page) }}"
   - trigger: template
@@ -84,7 +96,7 @@ triggers:
 
 actions:
   - variables:
-      away: "{{ states(zone_entity) | int(1) == 0 }}"
+      away: "{{ states(zone_entity) | int(1) == 0 and not guest_home }}"
       guest: "{{ page != '' and guest_path in states(page) }}"
       chosen: "{{ states(style) }}"
   - choose:

@@ -3,7 +3,7 @@ blueprint:
   description: >-
     A script you call from any automation to put a banner on the tablet (with a
     chime) and, if you ask, read it out loud. It stays quiet when nobody is home
-    or during quiet hours, unless you call it with "force" (e.g. the alarm
+    (unless your optional Guest at home switch is on) or during quiet hours, unless you call it with "force" (e.g. the alarm
     asking for the code). Call it with title, message and optionally icon,
     speak, spoken, duration and force.
   domain: script
@@ -41,6 +41,13 @@ blueprint:
       name: Home zone (skip when nobody is home)
       default: zone.home
       selector: { entity: { domain: zone } }
+    guest_switch:
+      name: Guest at home switch (optional)
+      description: >-
+        A toggle (e.g. an input_boolean "Guest at home") that is on while someone
+        stays in the house without you. While it is on, announcements still play when nobody else is home.
+      default: []
+      selector: { entity: { domain: [input_boolean, switch, binary_sensor] } }
     quiet_start:
       name: Quiet hours start
       default: "23:00:00"
@@ -91,6 +98,8 @@ variables:
   home_zone: !input home_zone
   quiet_start: !input quiet_start
   quiet_end: !input quiet_end
+  guest_switch: !input guest_switch
+  guest_home: "{{ guest_switch not in ['', none, []] and is_state(guest_switch, 'on') }}"
 
 sequence:
   - condition: template
@@ -98,7 +107,7 @@ sequence:
       {% set t = now().strftime('%H:%M:%S') %}
       {% set quiet = (t >= quiet_start or t < quiet_end) if quiet_start > quiet_end
                      else (quiet_start <= t < quiet_end) %}
-      {{ force | default(false) or ((states(home_zone) | int(0)) > 0 and not quiet) }}
+      {{ force | default(false) or (((states(home_zone) | int(0)) > 0 or guest_home) and not quiet) }}
   # Kiosk Satellite's notification action needs every field, even the empty ones.
   - action: "{{ notification_action }}"
     continue_on_error: true
