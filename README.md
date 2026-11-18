@@ -7,6 +7,10 @@ my_home.yaml  ──►  python tools/render.py  ──►  out/tablet.yaml   (w
                                              └─►  out/phone.yaml    (iPhone / Android)
 ```
 
+![The tablet dashboard and the phone dashboard, generated from the same file](docs/images/tablet-and-phone.png)
+
+<sub>Screenshots from a sample home (Home Assistant's demo devices, made-up people), not a real house.</sub>
+
 ## What you get
 
 | Page | Tablet | Phone |
@@ -20,6 +24,16 @@ my_home.yaml  ──►  python tools/render.py  ──►  out/tablet.yaml   (w
 
 The attention strip lists open doors/windows, batteries under 15 % and lights left on with nobody home — and stays empty the rest of the time.
 
+![Left: nothing needs doing, no strip. Right: lights left on with nobody home.](docs/images/attention-strip.png)
+
+With the Leaving feature, the Home page shows a countdown with **I'm staying** and **Arm now** while the house gets ready:
+
+![Leaving countdown with I'm staying and Arm now](docs/images/leaving-countdown.png)
+
+Every room gets its own page, on the tablet and on the phone:
+
+![A room page on the tablet and on the phone](docs/images/room-page.png)
+
 ## Requirements
 
 Home Assistant 2025.1 or newer, plus these frontend cards from HACS:
@@ -28,7 +42,7 @@ Home Assistant 2025.1 or newer, plus these frontend cards from HACS:
 |---|---|---|
 | [Mushroom](https://github.com/piitaya/lovelace-mushroom) | Lights summary, room tiles | Both |
 | [card-mod](https://github.com/thomasloven/lovelace-card-mod) | Attention strip accent | Both (optional) |
-| [Clock Weather Card](https://github.com/pkissling/clock-weather-card) | Clock and forecast | Both |
+| [Clock Weather Card](https://github.com/pkissling/clock-weather-card) **v3 or newer** | Clock and forecast | Both |
 | [navbar-card](https://github.com/joseluis9595/lovelace-navbar-card) | Bottom tab bar | Phone |
 | [kiosk-mode](https://github.com/NemesisRE/kiosk-mode) | Hide header/sidebar on the tablet | Tablet, if `kiosk: true` |
 | [Wall Panel](https://github.com/j-a-n/lovelace-wallpanel) | Photo screensaver | Tablet, if `screensaver` is set |
