@@ -86,6 +86,7 @@ def alert_strip(home: dict) -> dict:
     return {
         "type": "markdown",
         "content": template,
+        "show_empty": False,  # no empty box when there is nothing to say
         "grid_options": {"columns": 12},
         "card_mod": {"style": "ha-card { border-left: 4px solid var(--warning-color) !important; }"},
     }
@@ -114,6 +115,7 @@ def panel_cards(home: dict) -> list[dict]:
     if p.get("last_arrival"):
         cards.append({
             "type": "markdown",
+            "show_empty": False,
             "content": (
                 f"{{% set a = states('{p['last_arrival']}').split('|') %}}"
                 "{% if a | count == 2 and (now().timestamp() - a[1] | float(0)) < 600 %}"
@@ -208,14 +210,21 @@ def inside_range(home: dict) -> list[dict]:
 
 
 def home_sections(home: dict, phone: bool) -> list[dict]:
+    # Clock Weather Card v3 options (v3 removed forecast_rows / time_format / hide_clock).
     weather = {
         "type": "custom:clock-weather-card",
         "entity": home["weather"],
-        "forecast_rows": 3 if phone else 5,
-        "time_format": 24,
+        "sections": {
+            "forecast_strip": {"hide": True},
+            "forecast_list": {"count": 3 if phone else 5},
+        },
     }
-    if phone:
-        weather["hide_clock"] = True
+    if phone:  # the phone shows the time already: temperature, state and date only
+        weather["sections"]["header"] = {"rows": [
+            {"segments": [{"type": "icon", "icon": "mdi:thermometer"}, {"type": "weather", "attribute": "temperature"},
+                          {"type": "spacer"}, {"type": "weather"}]},
+            {"alignment": "center", "segments": [{"type": "icon", "icon": "mdi:calendar"}, {"type": "date"}]},
+        ]}
     first = [weather] + inside_range(home) + panel_cards(home) + [alert_strip(home), lights_summary(home)]
     if home.get("alarm"):
         first.append(tile(home["alarm"], 6, name="Alarm"))
