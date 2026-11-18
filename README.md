@@ -26,9 +26,11 @@ The attention strip lists open doors/windows, batteries under 15 % and lights le
 
 ![Left: nothing needs doing, no strip. Right: lights left on with nobody home.](docs/images/attention-strip.png)
 
-With the Leaving feature, the Home page shows a countdown with **I'm staying** and **Arm now** while the house gets ready:
+With the Leaving feature, one tap turns the house off and starts a countdown. **I'm staying** puts it all back:
 
-![Leaving countdown with I'm staying and Arm now](docs/images/leaving-countdown.png)
+![Left: 5 lights on, music playing. Middle: after Leaving, only the way-out light is on and the countdown shows I'm staying and Arm now. Right: after I'm staying, all 5 lights and the music are back.](docs/images/leaving-sequence.png)
+
+<sub>Before → Leaving (only the way-out light stays on, music paused) → I'm staying (all five lights and both speakers back as they were). Taken with the kit's own Leaving blueprints.</sub>
 
 Every room gets its own page, on the tablet and on the phone:
 

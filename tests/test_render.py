@@ -122,3 +122,12 @@ def test_regenerating_keeps_the_previous_version(tmp_path):
 def test_output_is_valid_yaml(tmp_path):
     for path in render.write(FULL, tmp_path):
         assert yaml.safe_load(path.read_text())["views"]
+
+
+def test_one_light_is_singular():
+    """'1 light on', not '1 lights on', in the summary tile and the attention strip."""
+    cards = list(all_cards(render.tablet(FULL)))
+    summary = next(c for c in cards if c.get("secondary") == "Tap to turn all off")
+    assert "'light' if n == 1 else 'lights'" in summary["primary"]
+    strip = next(c for c in cards if c.get("type") == "markdown" and "nobody home" in c.get("content", ""))
+    assert "' light' if on == 1 else ' lights'" in strip["content"]

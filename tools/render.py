@@ -79,7 +79,7 @@ def alert_strip(home: dict) -> dict:
         "{%- set ns.items = ns.items + ['🪫 ' ~ s.name ~ ' ' ~ s.state ~ '%'] -%}{%- endif -%}{%- endfor -%}\n"
         f"{{%- set on = expand({jinja_list(lights)}) | selectattr('state', 'eq', 'on') | list | count -%}}\n"
         "{%- if states('zone.home') | int(1) == 0 and on > 0 -%}"
-        "{%- set ns.items = ns.items + ['💡 ' ~ on ~ ' lights on and nobody home'] -%}{%- endif -%}\n"
+        "{%- set ns.items = ns.items + ['💡 ' ~ on ~ (' light' if on == 1 else ' lights') ~ ' on and nobody home'] -%}{%- endif -%}\n"
         + rain_line(home)
         + "{{ ns.items | join('<br>') }}"
     )
@@ -174,7 +174,7 @@ def lights_summary(home: dict) -> dict:
         "type": "custom:mushroom-template-card",
         "icon": "mdi:lightbulb-group",
         "color": f"{{{{ 'amber' if {count} else 'grey' }}}}",
-        "primary": f"{{{{ {count} }}}} lights on",
+        "primary": f"{{% set n = {count} %}}{{{{ n }}}} {{{{ 'light' if n == 1 else 'lights' }}}} on",
         "secondary": "Tap to turn all off",
         "tap_action": {
             "action": "perform-action",
