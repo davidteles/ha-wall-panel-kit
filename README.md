@@ -38,7 +38,7 @@ Every room gets its own page, on the tablet and on the phone:
 
 ## Requirements
 
-Home Assistant 2025.1 or newer, plus these frontend cards from HACS:
+Home Assistant 2025.1 or newer, plus these frontend cards from HACS. Tested with Home Assistant **2026.11.2** (a real wall tablet and phones) and **2026.2.3** (the sample home in the screenshots), with the current release of each card.
 
 | Card | Used for | Needed by |
 |---|---|---|
@@ -140,6 +140,8 @@ The rules behind the layout — what goes on Home, why phones never get kiosk mo
 
 For a tablet running [Kiosk Satellite](https://kiosksatellite.com). Helpers to create and an example *Panel settings* page: [docs/kiosk-satellite.md](docs/kiosk-satellite.md).
 
+**Three layers, each optional:** this kit is the dashboard you touch. [Glass Info](https://github.com/davidteles/ks-glass-info) is what the tablet shows while idle (a Kiosk Satellite plugin). [Festive Panel](https://github.com/davidteles/ha-festive-panel) adds snow and lights over either dashboard in December. None of them needs the others.
+
 | Blueprint | What it does | Import |
 |---|---|---|
 | **Keep the tablet awake while it matters** | Screen held on while the alarm counts down, a Leaving timer runs or the voice assistant talks; released 20 s later, only if it held it | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fkiosk_satellite%2Fkeep_awake.yaml) |
@@ -155,6 +157,14 @@ For a tablet running [Kiosk Satellite](https://kiosksatellite.com). Helpers to c
 - **Phase 1 (now):** generator for tablet + phone from `my_home.yaml`.
 - **Phase 2:** a dashboard *strategy* that builds the same layout straight from your Home Assistant areas — no file, no script.
 - More pages: car, media, shopping list, a guest view, seasonal extras (see [ha-festive-panel](https://github.com/davidteles/ha-festive-panel)).
+
+## Remove it
+
+Nothing is installed by the generator itself: it only writes YAML.
+
+1. Delete the two dashboards (*Settings → Dashboards*), or paste your old configuration back in their Raw configuration editor.
+2. Delete any automations and scripts you made from the kit's blueprints, then the blueprints (*Settings → Automations & scenes → Blueprints*).
+3. Optionally uninstall the cards you added only for the kit (navbar-card, kiosk-mode, Wall Panel) in HACS.
 
 ## Contributing
 
