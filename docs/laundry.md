@@ -12,12 +12,12 @@ When the wash is done, Home says so with the drying advice and three buttons. On
 
 | When | On Home |
 |---|---|
-| **Wash done** | "Laundry ready to hang · outside recommended", with the reason and the finish time. Then **Hung indoors**, **Hung outside** and **Nothing to hang** (with a confirmation). The recommended one says *Recommended*. The attention strip says 🧺 *Laundry ready to hang*. |
+| **Wash done** | "Laundry ready to hang · outside recommended", with the reason and the finish time. Then **Hung indoors** and **Hung outside**, the same size. The recommended one says *Recommended* and has a subtle border; with no reliable forecast, neither is highlighted, and nothing is preselected. **Nothing to hang** is a smaller chip below, with a confirmation. The attention strip says 🧺 *Laundry ready to hang*. |
 | **On the rack, nobody chose** | "Laundry on the rack — where is it drying?" with **Indoors** / **Outside** |
 | **Drying** | "Drying outside · tap to change to indoors", with a confirmation |
 | **Rain is coming while it's outside** | A red card "Laundry is outside — rain is coming · tap when it's indoors". The strip says ☔ *Laundry is outside and rain is coming*. |
 
-The buttons have no entity, so tapping an icon does exactly what tapping the card does.
+The buttons have no entity, so tapping an icon does exactly what tapping the card does. Each button tells the Laundry hung script whether it's an answer (`step: hung`) or a change of place (`step: move`). So if a phone answer arrived first, a late tap on a dashboard can't overwrite it. This needs ha-blueprints' Laundry hung script with the `step` field.
 
 ## What it needs
 

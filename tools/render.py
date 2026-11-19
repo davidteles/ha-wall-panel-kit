@@ -359,9 +359,12 @@ def _state(entity: str, state) -> dict:
 
 
 def _laundry_button(name: str, icon: str, place: str, script: str, visibility: list, color: str = "blue",
-                    secondary: str = "", columns: int = 4, confirm: str | None = None) -> dict:
-    """A button with no `entity`: tapping its icon can never toggle a helper by accident."""
-    action = {"action": "perform-action", "perform_action": script, "data": {"place": place}}
+                    secondary: str = "", columns: int = 4, confirm: str | None = None, step: str = "hung") -> dict:
+    """A button with no `entity`: tapping its icon can never toggle a helper by accident.
+
+    `step` tells the Laundry hung script what the tap means: "hung" (the answer, only while waiting) or
+    "move" (where it's drying, only once on the rack), so a late tap can't overwrite an answer."""
+    action = {"action": "perform-action", "perform_action": script, "data": {"place": place, "step": step}}
     if confirm:
         action["confirmation"] = {"text": confirm}
     card = {"type": "custom:mushroom-template-card", "primary": name, "icon": icon, "color": color,
@@ -397,12 +400,25 @@ def laundry_cards(home: dict) -> list[dict]:
         cards[0].update({"secondary": "Tap when it's out of the machine" + finished, "tap_action": off, "icon_tap_action": off})
         return cards
     script, place = l["script"], l["place"]
-    rec = lambda choice, other: adv + f"{{{{ 'Recommended' if a[0] == '{choice}' else '{other}' }}}}"
+
+    def choice(name: str, icon: str, place_name: str, advice: str) -> dict:
+        """Indoors / Outside: the same size; the recommended one gets a 'Recommended' label and a subtle
+        accent border (card-mod). Advice only: nothing is preselected, a tap is the only confirmation."""
+        b = _laundry_button(name, icon, place_name, script, waiting, columns=6,
+                            secondary=adv + f"{{{{ 'Recommended' if a[0] == '{advice}' else '\u200b' }}}}")  # same height either way: a zero-width space survives template trimming
+        b["card_mod"] = {"style": adv + "ha-card { {% if a[0] == '" + advice + "' %}border: 1.5px solid rgba(76, 175, 80, 0.65) !important;{% endif %} }"}
+        return b
+
+    nothing = {"action": "perform-action", "perform_action": script, "data": {"place": "Not hung", "step": "hung"},
+               "confirmation": {"text": "Nothing to hang from this cycle?"}}
     cards += [
-        _laundry_button("Hung indoors", "mdi:home", "Indoors", script, waiting, secondary=rec("indoors", "")),
-        _laundry_button("Hung outside", "mdi:weather-sunny", "Outside", script, waiting, secondary=rec("outdoors", "")),
-        _laundry_button("Nothing to hang", "mdi:close-circle-outline", "Not hung", script, waiting, color="grey",
-                        secondary="e.g. drum clean", confirm="Nothing to hang from this cycle?"),
+        choice("Hung indoors", "mdi:home", "Indoors", "indoors"),
+        choice("Hung outside", "mdi:weather-sunny", "Outside", "outdoors"),
+        # A secondary action, smaller than the two choices (chips have no entity, so no icon toggle).
+        {"type": "custom:mushroom-chips-card", "alignment": "center", "visibility": waiting,
+         "grid_options": {"columns": 12},
+         "chips": [{"type": "template", "icon": "mdi:close-circle-outline", "content": "Nothing to hang",
+                    "tap_action": nothing, "hold_action": {"action": "none"}}]},
     ]
     if l.get("on_rack"):
         not_set = [_state(l["on_rack"], "on"), _state(place, l.get("not_set_option", "Not set"))]
@@ -413,9 +429,9 @@ def laundry_cards(home: dict) -> list[dict]:
             "tap_action": {"action": "none"}, "icon_tap_action": {"action": "none"},
             "visibility": not_set, "grid_options": {"columns": 12},
         },
-            _laundry_button("Indoors", "mdi:home", "Indoors", script, not_set, columns=6),
-            _laundry_button("Outside", "mdi:weather-sunny", "Outside", script, not_set, columns=6)]
-        change = {"action": "perform-action", "perform_action": script, "data": {"place": "Change"},
+            _laundry_button("Indoors", "mdi:home", "Indoors", script, not_set, columns=6, step="move"),
+            _laundry_button("Outside", "mdi:weather-sunny", "Outside", script, not_set, columns=6, step="move")]
+        change = {"action": "perform-action", "perform_action": script, "data": {"place": "Change", "step": "move"},
                   "confirmation": {"text": "Change where the laundry is drying?"}}
         drying = [_state(l["on_rack"], "on"), _state(place, ["Indoors", "Outside"])]
         if l.get("rain_alert"):
@@ -429,7 +445,7 @@ def laundry_cards(home: dict) -> list[dict]:
             "visibility": drying, "grid_options": {"columns": 12},
         })
     if l.get("rain_alert"):
-        inside = {"action": "perform-action", "perform_action": script, "data": {"place": "Indoors"}}
+        inside = {"action": "perform-action", "perform_action": script, "data": {"place": "Indoors", "step": "move"}}
         cards.append({
             "type": "custom:mushroom-template-card", "icon": "mdi:weather-pouring", "color": "red",
             "primary": "Laundry is outside — rain is coming",

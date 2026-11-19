@@ -220,7 +220,8 @@ def test_quick_replies_speak_through_the_doorbell():
                                       "data": {"media_player_entity_id": "media_player.doorbell_speaker", "message": "Coming!"}}
     page = next(v for v in dash["views"] if v["path"] == "entry")
     assert any(c.get("type") == "custom:mushroom-chips-card" for c in page["sections"][0]["cards"])
-    assert not any(c.get("type") == "custom:mushroom-chips-card" for c in all_cards(render.tablet(FULL))), "only when configured"
+    assert not any(c.get("type") == "custom:mushroom-chips-card" and "tts.speak" in str(c)
+                   for c in all_cards(render.tablet(FULL))), "only when configured"
 
 
 LAUNDRY = FULL["laundry"]
@@ -236,10 +237,15 @@ def test_laundry_cards_on_home(build):
     cards = laundry_cards_of(build(FULL))
     names = [c.get("primary", "") for c in cards]
     assert any("Laundry ready to hang" in n for n in names)
-    for name, place in (("Hung indoors", "Indoors"), ("Hung outside", "Outside"), ("Nothing to hang", "Not hung")):
+    for name, place in (("Hung indoors", "Indoors"), ("Hung outside", "Outside")):
         b = next(c for c in cards if c.get("primary") == name)
-        assert b["tap_action"]["perform_action"] == LAUNDRY["script"] and b["tap_action"]["data"] == {"place": place}
+        assert b["tap_action"]["perform_action"] == LAUNDRY["script"] and b["tap_action"]["data"] == {"place": place, "step": "hung"}
         assert b["visibility"] == [{"condition": "state", "entity": LAUNDRY["waiting"], "state": "on"}]
+        assert b["grid_options"]["columns"] == 6, "both choices the same size"
+    chips = next(c for c in cards if c.get("type") == "custom:mushroom-chips-card")
+    nothing = chips["chips"][0]
+    assert nothing["content"] == "Nothing to hang" and nothing["tap_action"]["data"] == {"place": "Not hung", "step": "hung"}
+    assert nothing["tap_action"]["confirmation"], "Nothing to hang keeps its confirmation"
     assert "Laundry on the rack — where is it drying?" in names
     assert any(n.startswith("Drying {{") for n in names)
     assert "Laundry is outside — rain is coming" in names
@@ -249,7 +255,8 @@ def test_laundry_buttons_have_no_entity_and_the_icon_does_the_same():
     """A Mushroom template card with an entity toggles it when the icon is tapped: never on these."""
     for c in laundry_cards_of(render.tablet(FULL)):
         assert "entity" not in c, c.get("primary")
-        assert c.get("icon_tap_action") == c.get("tap_action"), c.get("primary")
+        if c.get("type") == "custom:mushroom-template-card":
+            assert c.get("icon_tap_action") == c.get("tap_action"), c.get("primary")
 
 
 def test_laundry_strip_lines():
@@ -269,3 +276,25 @@ def test_laundry_without_the_dropdown_is_one_tap_when_its_out():
 
 def test_no_laundry_section_no_laundry_cards():
     assert not laundry_cards_of(render.tablet(ONE_ROOM))
+
+
+def test_recommended_choice_is_labelled_not_preselected():
+    cards = laundry_cards_of(render.tablet(FULL))
+    inside = next(c for c in cards if c.get("primary") == "Hung indoors")
+    outside = next(c for c in cards if c.get("primary") == "Hung outside")
+    # The label and the accent depend on the advice text only; nothing is selected or called until a tap.
+    assert "'Recommended' if a[0] == 'indoors'" in inside["secondary"]
+    assert "'Recommended' if a[0] == 'outdoors'" in outside["secondary"]
+    assert "a[0] == 'outdoors'" in outside["card_mod"]["style"] and "border" in outside["card_mod"]["style"]
+    for b in (inside, outside):
+        assert b["tap_action"]["action"] == "perform-action" and "confirmation" not in b["tap_action"]
+
+
+def test_rack_buttons_are_moves_not_answers():
+    """A late tap on a 'Hung …' button can't overwrite an answer; buttons on the rack are moves."""
+    cards = laundry_cards_of(render.tablet(FULL))
+    for name in ("Indoors", "Outside", "Laundry is outside — rain is coming"):
+        b = next(c for c in cards if c.get("primary") == name)
+        assert b["tap_action"]["data"]["step"] == "move", name
+    change = next(c for c in cards if str(c.get("primary", "")).startswith("Drying {{"))
+    assert change["tap_action"]["data"] == {"place": "Change", "step": "move"}
