@@ -1,0 +1,261 @@
+blueprint:
+  name: Entry — someone rang (pop-up, phones, open buttons)
+  description: >-
+    When the doorbell or the building intercom rings:
+
+    - the "Entry ringing" toggle turns on, so the kit's Home page shows a red
+      **Someone at the door** card and the attention strip says so;
+
+    - a **pop-up** opens on the screens you pick (needs
+      [browser_mod](https://github.com/thomasloven/hass-browser_mod)) with
+      the live camera, two-way talk if you set a go2rtc stream (needs the
+      [WebRTC Camera](https://github.com/AlexxIT/WebRTC) card), and an
+      **Open** button per door with a confirmation;
+
+    - the **phones** get a time-sensitive notification with a snapshot and
+      one **Open** button per door. On iPhone, the button asks for Face ID
+      or the passcode first.
+
+
+    Opening a door (from anywhere, with the kit's "Entry — open a door"
+    scripts) shows "opened" for a few seconds — so you can watch them come in —
+    then closes the pop-up; the phones get a quiet "opened at …" instead of the
+    ring. Dismiss, or the ring time running out, closes it too.
+
+
+    Works with anything that rings in Home Assistant: a doorbell **event**
+    entity (UniFi Protect, Reolink, Fermax, BTicino and others), a doorbell
+    **binary sensor**, or a **button** (for testing).
+
+
+    **Create first:** a Toggle "Entry ringing". Recommended: a Date and time
+    helper "Entry last ring". Then one "Entry — open a door" script per door.
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/entry/entry_ring.yaml
+  input:
+    name:
+      name: Name
+      description: e.g. Building door. Used in the texts ("Someone at the building door").
+      default: Door
+      selector: { text: {} }
+    ring:
+      name: What rings
+      description: Doorbell event entity, binary sensor or button. Several are fine (e.g. the street panel and the flat door).
+      selector: { entity: { domain: [event, binary_sensor, input_button, button], multiple: true } }
+    ringing:
+      name: '"Entry ringing" toggle'
+      selector: { entity: { domain: input_boolean } }
+    last_ring:
+      name: '"Entry last ring" date and time helper (optional)'
+      default: []
+      selector: { entity: { domain: input_datetime } }
+    doors:
+      name: Door scripts
+      description: The "Entry — open a door" scripts, in button order (e.g. Building door, Gate).
+      default: []
+      selector: { entity: { domain: script, multiple: true } }
+    camera:
+      name: Camera (optional)
+      default: []
+      selector: { entity: { domain: camera } }
+    talk_stream:
+      name: go2rtc stream for two-way talk (optional)
+      description: >-
+        The stream name in go2rtc (with a back-channel/microphone source). The pop-up then uses
+        the WebRTC Camera card with the microphone. Browsers only allow the microphone over HTTPS.
+      default: ""
+      selector: { text: {} }
+    ring_time:
+      name: Keep ringing for
+      description: How long the pop-up and the red card stay up without an answer.
+      default: { seconds: 90 }
+      selector: { duration: {} }
+    close_after_open:
+      name: After opening, close the pop-up after
+      description: The pop-up stays a moment after a door opens, so you can watch them come in.
+      default: { seconds: 10 }
+      selector: { duration: {} }
+    popup_browsers:
+      name: Pop-up on these browser_mod browsers (optional)
+      description: >-
+        Browser IDs from browser_mod, separated by commas, or "all". Leave empty for no pop-up
+        (the red card and the phones still work).
+      default: ""
+      selector: { text: {} }
+    phones:
+      name: Phones (optional)
+      description: Companion-app phones to notify. Without phones, the notification action below is used.
+      default: []
+      selector: { device: { integration: mobile_app, multiple: true } }
+    notify_action:
+      name: Notification action (when no phones are picked)
+      description: e.g. notify.mobile_app_your_phone or a notify group. Leave empty for no notification.
+      default: ""
+      selector: { text: {} }
+    phone_page:
+      name: Page to open from the notification
+      default: /phone-home/entry
+      selector: { text: {} }
+
+mode: restart
+
+variables:
+  name: !input name
+  ringing_entity: !input ringing
+  last_entity: !input last_ring
+  doors: !input doors
+  door_list: "{{ [doors] if doors is string and doors else (doors | list if doors else []) }}"
+  camera: !input camera
+  has_camera: "{{ camera not in ['', none, []] }}"
+  talk_stream: !input talk_stream
+  ring_time: !input ring_time
+  close_after_open: !input close_after_open
+  popup_input: !input popup_browsers
+  popup_ids: "{{ popup_input.split(',') | map('trim') | reject('eq', '') | list }}"
+  popup_all: "{{ popup_ids | map('lower') | list == ['all'] }}"
+  popup_on: "{{ popup_ids | count > 0 }}"
+  phones: !input phones
+  phone_list: "{{ [phones] if phones is string and phones else (phones | list if phones else []) }}"
+  notify_input: !input notify_action
+  targets: >-
+    {{ phone_list | map('device_attr', 'name') | reject('none') | map('slugify')
+       | map('regex_replace', '^', 'notify.mobile_app_') | list
+       or ([notify_input] if notify_input else []) }}
+  phone_page: !input phone_page
+  door_names: "{{ door_list | map('state_attr', 'friendly_name') | map('default', 'Door') | list }}"
+  phone_actions: >-
+    {% set ns = namespace(a=[]) %}
+    {% for d in door_list %}
+      {% set ns.a = ns.a + [{'action': 'ENTRY_OPEN_' ~ loop.index0, 'title': 'Open ' ~ (state_attr(d, 'friendly_name') or 'door') | lower,
+                             'authenticationRequired': true, 'destructive': true}] %}
+    {% endfor %}
+    {{ ns.a }}
+  popup_card: >-
+    {% set ns = namespace(cards=[], buttons=[]) %}
+    {% if talk_stream %}
+      {% set ns.cards = [{'type': 'custom:webrtc-camera', 'url': talk_stream, 'media': 'video,audio,microphone'}] %}
+    {% elif has_camera %}
+      {% set ns.cards = [{'type': 'picture-entity', 'entity': camera, 'camera_view': 'live', 'show_name': false, 'show_state': false}] %}
+    {% endif %}
+    {% for d in door_list %}
+      {% set door = (state_attr(d, 'friendly_name') or 'door') | lower %}
+      {% set ns.buttons = ns.buttons + [{'type': 'button', 'entity': d, 'name': 'Open ' ~ door,
+          'icon': 'mdi:door-open', 'show_state': false,
+          'tap_action': {'action': 'perform-action', 'perform_action': 'script.turn_on', 'target': {'entity_id': d},
+                         'confirmation': {'text': 'Open the ' ~ door ~ '?'}}}] %}
+    {% endfor %}
+    {% set ns.buttons = ns.buttons + [{'type': 'button', 'name': 'Dismiss', 'icon': 'mdi:close', 'show_state': false,
+        'tap_action': {'action': 'perform-action', 'perform_action': 'input_boolean.turn_off', 'target': {'entity_id': ringing_entity}}}] %}
+    {{ {'type': 'vertical-stack', 'cards': ns.cards + [{'type': 'grid', 'columns': ns.buttons | count, 'square': false, 'cards': ns.buttons}]} }}
+
+triggers:
+  - trigger: state
+    entity_id: !input ring
+    id: ring
+  - trigger: event
+    event_type: wall_panel_entry_opened
+    id: opened
+  - trigger: event
+    event_type: mobile_app_notification_action
+    id: phone_button
+  - trigger: state
+    entity_id: !input ringing
+    from: "on"
+    to: "off"
+    id: dismissed
+
+conditions:
+  - alias: A real ring, or a door button from our notification
+    condition: template
+    value_template: >-
+      {% if trigger.id == 'ring' %}
+        {% set e = trigger.entity_id %}
+        {% set was = trigger.from_state.state if trigger.from_state else 'unavailable' %}
+        {% set now_s = trigger.to_state.state if trigger.to_state else 'unavailable' %}
+        {% if e.startswith('binary_sensor.') %}{{ now_s == 'on' and was == 'off' }}
+        {% elif now_s in ['unavailable', 'unknown'] or was == 'unavailable' or was == now_s %}false
+        {% elif e.startswith('event.') %}
+          {#- Only "ring" when the entity has a ring event type (UniFi Protect, Reolink…); any event otherwise. -#}
+          {% set types = trigger.to_state.attributes.event_types | default([]) %}
+          {{ 'ring' not in types or trigger.to_state.attributes.event_type == 'ring' }}
+        {% else %}true{% endif %}
+      {% elif trigger.id == 'phone_button' %}
+        {{ (trigger.event.data.action | default('')).startswith('ENTRY_OPEN_') }}
+      {% else %}true{% endif %}
+
+actions:
+  - choose:
+      - alias: Ring → toggle on, pop-up, phones; then wait
+        conditions: [{ condition: trigger, id: ring }]
+        sequence:
+          - action: input_boolean.turn_on
+            target: { entity_id: "{{ ringing_entity }}" }
+          - if:
+              - condition: template
+                value_template: "{{ last_entity not in ['', none, []] }}"
+            then:
+              - action: input_datetime.set_datetime
+                target: { entity_id: "{{ last_entity }}" }
+                data: { timestamp: "{{ now().timestamp() }}" }
+          - if:
+              - condition: template
+                value_template: "{{ popup_on }}"
+            then:
+              - action: browser_mod.popup
+                continue_on_error: true
+                data: >-
+                  {% set d = {'title': '🔔 ' ~ name, 'content': popup_card, 'size': 'wide',
+                              'timeout': ((ring_time.hours | default(0)) * 3600 + (ring_time.minutes | default(0)) * 60 + (ring_time.seconds | default(0))) * 1000} %}
+                  {{ d if popup_all else dict(d, browser_id=popup_ids) }}
+          - repeat:
+              for_each: "{{ targets }}"
+              sequence:
+                - action: "{{ repeat.item }}"
+                  continue_on_error: true
+                  data:
+                    title: "🔔 Someone at the {{ name | lower }}"
+                    message: "{{ now().strftime('%H:%M') }}{{ ' — press and hold to see and open' if phone_actions else '' }}"
+                    data: >-
+                      {% set d = {'tag': 'entry-ring', 'group': 'entry', 'url': phone_page, 'clickAction': phone_page,
+                                  'push': {'interruption-level': 'time-sensitive'}, 'actions': phone_actions} %}
+                      {{ dict(d, image='/api/camera_proxy/' ~ camera, entity_id=camera) if has_camera else d }}
+          - delay: "{{ ring_time }}"
+          - action: input_boolean.turn_off
+            target: { entity_id: "{{ ringing_entity }}" }
+
+      - alias: Phone "Open …" button → run that door script
+        conditions: [{ condition: trigger, id: phone_button }]
+        sequence:
+          - variables:
+              index: "{{ trigger.event.data.action.replace('ENTRY_OPEN_', '') | int(-1) }}"
+          - condition: template
+            value_template: "{{ 0 <= index < door_list | count }}"
+          - action: script.turn_on
+            target: { entity_id: "{{ door_list[index] }}" }
+
+      - alias: Opened → phones say so; the pop-up stays a moment, then closes
+        conditions: [{ condition: trigger, id: opened }]
+        sequence:
+          - repeat:
+              for_each: "{{ targets }}"
+              sequence:
+                - action: "{{ repeat.item }}"
+                  continue_on_error: true
+                  data:
+                    title: "✅ {{ trigger.event.data.door | default(name) }} opened"
+                    message: "at {{ now().strftime('%H:%M') }}"
+                    data: { tag: entry-ring, group: entry, push: { interruption-level: passive } }
+          - delay: "{{ close_after_open }}"
+          - action: input_boolean.turn_off
+            target: { entity_id: "{{ ringing_entity }}" }
+
+      - alias: Dismissed (or timed out) → close the pop-up
+        conditions: [{ condition: trigger, id: dismissed }]
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ popup_on }}"
+            then:
+              - action: browser_mod.close_popup
+                continue_on_error: true
+                data: "{{ {} if popup_all else {'browser_id': popup_ids} }}"

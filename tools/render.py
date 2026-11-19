@@ -81,6 +81,7 @@ def alert_strip(home: dict) -> dict:
         "{%- if states('zone.home') | int(1) == 0 and on > 0 -%}"
         "{%- set ns.items = ns.items + ['💡 ' ~ on ~ (' light' if on == 1 else ' lights') ~ ' on and nobody home'] -%}{%- endif -%}\n"
         + rain_line(home)
+        + entry_line(home)
         + "{{ ns.items | join('<br>') }}"
     )
     return {
@@ -106,6 +107,232 @@ def rain_line(home: dict) -> str:
         "{%- set ns.items = ['☔ Rain ' ~ ('now' if r == 'now' else 'from ' ~ r) ~ ' — take an umbrella'] + ns.items -%}"
         "{%- endif -%}\n"
     )
+
+
+# ---------------------------------------------------------------- entry (doorbell / intercom)
+
+def entry(home: dict) -> dict:
+    return home.get("entry") or {}
+
+
+def entry_line(home: dict) -> str:
+    e = entry(home)
+    if not e.get("ringing"):
+        return ""
+    return (
+        f"{{%- if is_state('{e['ringing']}', 'on') -%}}"
+        f"{{%- set ns.items = ['🔔 Someone at the {e.get('name', 'door').lower()}'] + ns.items -%}}"
+        "{%- endif -%}\n"
+    )
+
+
+def entry_camera(e: dict) -> dict:
+    """Live video; with talk_stream, the WebRTC Camera card with the microphone for two-way talk."""
+    if e.get("talk_stream"):
+        return {"type": "custom:webrtc-camera", "url": e["talk_stream"], "media": "video,audio,microphone",
+                **({"entity": e["camera"]} if e.get("camera") else {}), "grid_options": {"columns": 12}}
+    return {"type": "picture-entity", "entity": e["camera"], "camera_view": "live", "show_state": False,
+            "show_name": False, "grid_options": {"columns": 12}}
+
+
+def door_button(door: dict, columns: int) -> dict:
+    target = door["open"]
+    domain = target.split(".")[0]
+    action = {"script": "script.turn_on", "lock": "lock.open", "button": "button.press",
+              "input_button": "input_button.press", "cover": "cover.open_cover"}.get(domain, "script.turn_on")
+    return {
+        "type": "custom:mushroom-template-card",
+        "primary": door["name"],
+        "secondary": "Tap to open",
+        "icon": door.get("icon", "mdi:door-open"),
+        "color": "green",
+        "tap_action": {"action": "perform-action", "perform_action": action, "target": {"entity_id": target},
+                       "confirmation": {"text": f"Open the {door['name'].lower()}?"}},
+        "grid_options": {"columns": columns},
+    }
+
+
+def quick_replies(e: dict) -> list[dict]:
+    """'Coming!' and the like, spoken through the doorbell's speaker — for doorbells without two-way talk."""
+    if not (e.get("speaker") and e.get("tts") and e.get("replies")):
+        return []
+    chips = [{
+        "type": "template",
+        "icon": "mdi:message-reply-text",
+        "content": text,
+        "tap_action": {"action": "perform-action", "perform_action": "tts.speak", "target": {"entity_id": e["tts"]},
+                       "data": {"media_player_entity_id": e["speaker"], "message": text}},
+    } for text in e["replies"]]
+    return [{"type": "custom:mushroom-chips-card", "alignment": "center", "chips": chips}]
+
+
+def entry_sections(home: dict) -> list[dict]:
+    e = entry(home)
+    name = e.get("name", "Door")
+    cards: list[dict] = [heading(name, "mdi:doorbell-video")]
+    if e.get("ringing"):
+        last = e.get("last_ring")
+        cards.append({
+            "type": "custom:mushroom-template-card",
+            "icon": "mdi:bell-ring",
+            "color": f"{{{{ 'red' if is_state('{e['ringing']}', 'on') else 'grey' }}}}",
+            "primary": f"{{{{ 'Someone is at the {name.lower()}' if is_state('{e['ringing']}', 'on') else 'Nobody is ringing' }}}}",
+            # The helper's timestamp attribute, not its state: the state has no time zone.
+            "secondary": (f"{{% set ts = state_attr('{last}', 'timestamp') %}}{{{{ ('Last ring ' ~ ts | timestamp_custom('%a %H:%M')) if ts else 'No rings yet' }}}}"
+                          if last else ""),
+            "tap_action": {"action": "perform-action", "perform_action": "input_boolean.turn_off",
+                           "target": {"entity_id": e["ringing"]}},
+            "grid_options": {"columns": 12},
+        })
+    if e.get("camera") or e.get("talk_stream"):
+        cards.append(entry_camera(e))
+    cards += [{**c, "grid_options": {"columns": 12}} for c in quick_replies(e)]
+    doors = e.get("doors") or []
+    for door in doors:
+        cards.append(door_button(door, 12 if len(doors) == 1 else 6))
+    return [{"type": "grid", "cards": cards}]
+
+
+OVERLAY_STYLE = """:host {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 8;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(45, 0, 0, 0.62);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+ha-card {
+  width: min(520px, 100%) !important;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto !important;
+  box-sizing: border-box;
+  padding: 14px 18px 18px !important;
+  border-radius: 28px !important;
+  background: rgba(26, 14, 16, 0.95) !important;
+  border: 2px solid rgba(255, 59, 48, 0.85) !important;
+  animation: wp-entry-pulse 1.2s ease-in-out infinite;
+}
+@keyframes wp-entry-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0), 0 24px 70px rgba(0, 0, 0, 0.6); }
+  50% { box-shadow: 0 0 40px 6px rgba(255, 59, 48, 0.55), 0 24px 70px rgba(0, 0, 0, 0.6); }
+}
+@media (orientation: landscape) and (min-width: 700px) and (max-height: 920px) {
+  ha-card { width: min(980px, 100%) !important; }
+}"""
+
+# Landscape tablets: camera on the left, the text and the buttons on the right.
+OVERLAY_LANDSCAPE = """@media (orientation: landscape) and (min-width: 700px) and (max-height: 920px) {
+  #root { display: grid !important; grid-template-columns: 3fr 2fr; grid-template-rows: auto auto 1fr; column-gap: 24px; row-gap: 12px; align-items: center; }
+  #root > *:nth-child(1) { grid-column: 2; grid-row: 1; }
+  #root > *:nth-child(2) { grid-column: 1; grid-row: 1 / span 3; }
+  #root > *:nth-child(3) { grid-column: 2; grid-row: 2; align-self: start; }
+  #root > *:nth-child(4) { grid-column: 2; grid-row: 3; align-self: start; }
+}"""
+
+FLAT = """ha-card { background: transparent !important; border: none !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }"""
+
+
+def opened_template(e: dict) -> str:
+    """Sets `opened` to the name of a door whose script ran in the last 30 s ('' otherwise)."""
+    pairs = [(d["name"], d["open"]) for d in e.get("doors") or [] if str(d.get("open", "")).startswith("script.")]
+    if not pairs:
+        return "{% set opened = '' %}"
+    items = ", ".join(f"('{n}', '{x}')" for n, x in pairs)
+    return ("{% set ns = namespace(o='') %}"
+            f"{{% for n, x in [{items}] %}}{{% set t = state_attr(x, 'last_triggered') %}}"
+            "{% if t and (now() - t).total_seconds() < 30 %}{% set ns.o = n %}{% endif %}{% endfor %}"
+            "{% set opened = ns.o %}")
+
+
+def entry_overlay(home: dict) -> list[dict]:
+    """The pop-up built into the dashboard (like an alarm takeover): needs only card-mod, no browser add-on.
+
+    It covers whatever page is open while the ringing toggle is on, and goes away when a door is opened,
+    Dismiss is pressed or the ring time runs out.
+    """
+    e = entry(home)
+    if not e.get("ringing") or e.get("popup", "card") != "card":
+        return []
+    name = e.get("name", "door").lower()
+    last = e.get("last_ring")
+    header = {
+        "type": "custom:mushroom-template-card",
+        # Right after a door script runs, the header says so (the pop-up stays a few seconds, then closes).
+        "primary": (opened_template(e) + "{{ ('✓ ' ~ opened ~ ' opened') if opened else \"Someone's at the door\" }}"),
+        "secondary": (f"{{% set ts = state_attr('{last}', 'timestamp') %}}{e.get('name', 'Door')}{{{{ (' · rang at ' ~ ts | timestamp_custom('%H:%M')) if ts else '' }}}}"
+                      if last else e.get("name", "Door")),
+        "icon": opened_template(e) + "{{ 'mdi:door-open' if opened else 'mdi:bell-ring' }}",
+        "icon_color": opened_template(e) + "{{ 'green' if opened else 'red' }}",
+        "layout": "vertical",
+        "tap_action": {"action": "none"},
+        "hold_action": {"action": "none"},
+        "card_mod": {"style": FLAT + """
+ha-card { --ha-tile-info-primary-font-size: 26px; --ha-tile-info-primary-line-height: 32px;
+  --ha-tile-info-secondary-font-size: 15px; --card-primary-font-size: 26px; --card-secondary-font-size: 15px; }
+ha-tile-icon, mushroom-shape-icon { --tile-icon-size: 64px; --icon-size: 64px; --mdc-icon-size: 38px;
+  animation: wp-entry-icon 1s ease-in-out infinite; }
+@keyframes wp-entry-icon { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }"""},
+    }
+    camera = entry_camera(e) if (e.get("camera") or e.get("talk_stream")) else {"type": "markdown", "content": " "}
+    camera = {k: v for k, v in camera.items() if k != "grid_options"}
+    camera["card_mod"] = {"style": "ha-card { border-radius: 18px !important; overflow: hidden; }"}
+    buttons = []
+    for door in e.get("doors") or []:
+        b = door_button(door, 6)
+        b.pop("grid_options", None)
+        b["layout"] = "vertical"
+        b["card_mod"] = {"style": "ha-card { background: rgba(48, 209, 88, 0.16) !important;"
+                                  " border: 1px solid rgba(48, 209, 88, 0.55) !important; --card-primary-font-size: 18px; }"}
+        buttons.append(b)
+    buttons.append({
+        "type": "custom:mushroom-template-card", "primary": "Dismiss", "icon": "mdi:close", "color": "grey",
+        "layout": "vertical",
+        "tap_action": {"action": "perform-action", "perform_action": "input_boolean.turn_off",
+                       "target": {"entity_id": e["ringing"]}},
+    })
+    return [{
+        "type": "custom:mod-card",
+        "visibility": [{"condition": "state", "entity": e["ringing"], "state": "on"}],
+        "grid_options": {"columns": 12},
+        "card_mod": {"style": {"hui-vertical-stack-card$": OVERLAY_LANDSCAPE, ".": OVERLAY_STYLE}},
+        "card": {"type": "vertical-stack", "cards": [header, camera] + quick_replies(e) + [
+            # As many columns as buttons (up to 3): one door → two wide buttons, two doors → three.
+            {"type": "grid", "columns": min(len(buttons), 3), "square": False, "cards": buttons},
+        ]},
+    }]
+
+
+def with_overlay(home: dict, sections: list[dict]) -> list[dict]:
+    """Put the entry pop-up in the first section of a page, so it shows on every page."""
+    overlay = entry_overlay(home)
+    if not overlay or not sections:
+        return sections
+    return [{**sections[0], "cards": overlay + sections[0]["cards"]}] + sections[1:]
+
+
+def entry_home_card(home: dict) -> list[dict]:
+    """A red card on Home while someone is ringing (when the pop-up is not the built-in one); tap goes to the Entry page."""
+    e = entry(home)
+    if not e.get("ringing") or e.get("popup", "card") == "card":
+        return []
+    return [{
+        "type": "custom:mushroom-template-card",
+        "icon": "mdi:bell-ring",
+        "color": "red",
+        "primary": f"Someone at the {e.get('name', 'door').lower()}",
+        "secondary": "Tap to see and answer",
+        "tap_action": {"action": "navigate", "navigation_path": f"{home['_base']}/entry"},
+        "visibility": [{"condition": "state", "entity": e["ringing"], "state": "on"}],
+        "grid_options": {"columns": 12},
+        "card_mod": {"style": "ha-card { background: rgba(244, 67, 54, 0.22) !important;"
+                              " border: 1px solid rgba(244, 67, 54, 0.6) !important; }"},
+    }]
 
 
 def panel_cards(home: dict) -> list[dict]:
@@ -225,7 +452,7 @@ def home_sections(home: dict, phone: bool) -> list[dict]:
                           {"type": "spacer"}, {"type": "weather"}]},
             {"alignment": "center", "segments": [{"type": "icon", "icon": "mdi:calendar"}, {"type": "date"}]},
         ]}
-    first = [weather] + inside_range(home) + panel_cards(home) + [alert_strip(home), lights_summary(home)]
+    first = entry_home_card(home) + [weather] + inside_range(home) + panel_cards(home) + [alert_strip(home), lights_summary(home)]
     if home.get("alarm"):
         first.append(tile(home["alarm"], 6, name="Alarm"))
     sections = [{"type": "grid", "cards": first}]
@@ -302,6 +529,8 @@ def pages(home: dict) -> list[dict]:
         out.append(("security", "Security", "mdi:shield-home", security_sections(home)))
     if home.get("energy"):
         out.append(("energy", "Energy", "mdi:lightning-bolt", energy_sections(home)))
+    if home.get("entry"):
+        out.append(("entry", "Entry", "mdi:doorbell-video", entry_sections(home)))  # short: it's a tab label
     return out
 
 
@@ -320,11 +549,11 @@ def tablet(home: dict) -> dict:
     views = []
     for path, title, icon, sections in pages(home):
         views.append({"title": title, "path": path, "icon": icon, "type": "sections", "max_columns": 4,
-                      "sections": sections or home_sections(home, phone=False)})
+                      "sections": with_overlay(home, sections or home_sections(home, phone=False))})
     for room in home["rooms"]:
         views.append({"title": room["name"], "path": slug(room["name"]), "icon": room.get("icon"),
                       "type": "sections", "subview": True, "back_path": "/wall-panel/rooms",
-                      "sections": room_sections(room)})
+                      "sections": with_overlay(home, room_sections(room))})
     dash: dict = {"views": views}
 
     t = home.get("tablet") or {}
@@ -352,7 +581,7 @@ def phone(home: dict) -> dict:
     bar = navbar(home)
     views = []
     for path, title, icon, sections in pages(home):
-        sections = sections or home_sections(home, phone=True)
+        sections = with_overlay(home, sections or home_sections(home, phone=True))
         sections = [{**sections[0], "cards": [bar] + sections[0]["cards"]}] + sections[1:]
         view = {"title": title, "path": path, "icon": icon, "type": "sections", "max_columns": 1,
                 "sections": sections}
@@ -360,7 +589,7 @@ def phone(home: dict) -> dict:
             view.update({"subview": True, "back_path": "/phone-home/home"})
         views.append(view)
     for room in home["rooms"]:
-        sections = room_sections(room)
+        sections = with_overlay(home, room_sections(room))
         sections = [{**sections[0], "cards": [bar] + sections[0]["cards"]}]
         views.append({"title": room["name"], "path": slug(room["name"]), "icon": room.get("icon"),
                       "type": "sections", "max_columns": 1, "subview": True,
@@ -374,7 +603,10 @@ ENTITY = re.compile(r"^[a-z0-9_]+\.[a-z0-9_]+$")
 SINGLE = ("weather", "calendar", "alarm")
 ROOM_SINGLE = ("temperature", "humidity", "climate", "media")
 ROOM_LISTS = ("lights", "covers", "other")
-RESERVED = {"home", "rooms", "security", "energy"}
+RESERVED = {"home", "rooms", "security", "energy", "entry"}
+ENTRY_SINGLE = ("ringing", "last_ring", "camera", "speaker", "tts")
+POPUPS = ("card", "browser_mod", "none")
+OPENERS = ("script", "lock", "button", "input_button", "cover")
 
 
 def check(home) -> list[str]:
@@ -392,6 +624,30 @@ def check(home) -> list[str]:
             entity(key, home[key])
     for i, person in enumerate(home.get("people") or []):
         entity(f"people[{i}]", person)
+    e = home.get("entry")
+    if e is not None:
+        if not isinstance(e, dict):
+            errors.append("entry: must be a mapping (ringing:, camera:, doors: …)")
+        else:
+            for key in ENTRY_SINGLE:
+                if e.get(key):
+                    entity(f"entry {key}", e[key])
+            if e.get("popup", "card") not in POPUPS:
+                errors.append(f"entry popup: {e.get('popup')!r} — use card (built in, needs card-mod), browser_mod or none")
+            if not e.get("ringing"):
+                errors.append("entry: 'ringing' is missing (the toggle the entry_ring blueprint turns on)")
+            doors = e.get("doors") or []
+            if not isinstance(doors, list) or not doors:
+                errors.append("entry doors: list at least one door, e.g. [{name: Building door, open: script.open_building_door}]")
+            else:
+                for j, door in enumerate(doors):
+                    if not isinstance(door, dict) or not door.get("name") or not door.get("open"):
+                        errors.append(f"entry doors[{j}]: needs a 'name' and an 'open' entity")
+                        continue
+                    entity(f"entry doors[{j}] ({door['name']}) open", door["open"])
+                    if isinstance(door["open"], str) and door["open"].split(".")[0] not in OPENERS:
+                        errors.append(f"entry doors[{j}] ({door['name']}): 'open' must be a script, lock, button or cover "
+                                      "(for a relay switch, use the entry_open script blueprint)")
     rooms = home.get("rooms") or []
     if not isinstance(rooms, list):
         return errors + ["'rooms' must be a list (each item starts with '- name:')"]

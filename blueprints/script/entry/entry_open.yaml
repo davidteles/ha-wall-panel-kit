@@ -1,0 +1,74 @@
+blueprint:
+  name: Entry — open a door or gate
+  description: >-
+    One script per door, gate or barrier. The kit's Entry page, the doorbell
+    pop-up and the phone's **Open** button all run it.
+
+    It works with whatever opens your door:
+
+    - a **lock**: *open* if the lock supports it (an electric strike), otherwise *unlock*
+
+    - a **button** or **Button helper**: press
+
+    - a **switch** (a relay wired to the intercom's "door open" contact): on, wait, off
+
+    - a **cover** (a gate or a garage): open
+
+
+    After opening it fires the event `wall_panel_entry_opened`, so the ring
+    automation closes the pop-up and clears the phones.
+  domain: script
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/script/entry/entry_open.yaml
+  input:
+    door_name:
+      name: Name
+      description: e.g. Building door, Gate. Shown on the button and in the log.
+      default: Door
+      selector: { text: {} }
+    opener:
+      name: What opens it
+      selector: { entity: { domain: [lock, button, input_button, switch, cover] } }
+    pulse:
+      name: Relay pulse (switches only)
+      description: How long a relay stays on. Most intercom door-release contacts need 1–3 seconds.
+      default: 2
+      selector: { number: { min: 0.5, max: 15, step: 0.5, unit_of_measurement: s } }
+
+mode: single
+icon: mdi:door-open
+
+variables:
+  door_name: !input door_name
+  opener: !input opener
+  pulse: !input pulse
+  domain: "{{ opener.split('.')[0] }}"
+
+sequence:
+  - choose:
+      - conditions: "{{ domain == 'lock' and (state_attr(opener, 'supported_features') | int(0)) | bitwise_and(1) > 0 }}"
+        sequence:
+          - action: lock.open
+            target: { entity_id: "{{ opener }}" }
+      - conditions: "{{ domain == 'lock' }}"
+        sequence:
+          - action: lock.unlock
+            target: { entity_id: "{{ opener }}" }
+      - conditions: "{{ domain in ['button', 'input_button'] }}"
+        sequence:
+          - action: "{{ domain }}.press"
+            target: { entity_id: "{{ opener }}" }
+      - conditions: "{{ domain == 'switch' }}"
+        sequence:
+          - action: switch.turn_on
+            target: { entity_id: "{{ opener }}" }
+          - delay: { milliseconds: "{{ (pulse | float * 1000) | int }}" }
+          - action: switch.turn_off
+            target: { entity_id: "{{ opener }}" }
+      - conditions: "{{ domain == 'cover' }}"
+        sequence:
+          - action: cover.open_cover
+            target: { entity_id: "{{ opener }}" }
+  - event: wall_panel_entry_opened
+    event_data:
+      door: "{{ door_name }}"
+      entity_id: "{{ opener }}"

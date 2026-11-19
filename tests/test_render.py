@@ -72,7 +72,7 @@ def test_optional_pages_appear_only_when_configured():
     assert {"home", "rooms", "living-room"} <= paths
     assert not {"security", "energy"} & paths
     full_paths = {v["path"] for v in render.tablet(FULL)["views"]}
-    assert {"security", "energy"} <= full_paths
+    assert {"security", "energy", "entry"} <= full_paths
 
 
 def test_the_examples_are_valid():
@@ -97,6 +97,12 @@ def broken(**changes) -> dict:
     (broken(rooms=[{"name": "Kitchen", "lights": ["kitchen lamp"]}]), "rooms[0] (Kitchen) lights[0]: 'kitchen lamp' is not an entity id"),
     (broken(alarm="alarm panel"), "alarm: 'alarm panel' is not an entity id"),
     (broken(people=["person.alex", "Sam"]), "people[1]: 'Sam' is not an entity id"),
+    (broken(entry={"doors": [{"name": "Door", "open": "script.open"}]}), "entry: 'ringing' is missing"),
+    (broken(entry={"ringing": "input_boolean.r"}), "entry doors: list at least one door"),
+    (broken(entry={"ringing": "input_boolean.r", "popup": "modal", "doors": [{"name": "D", "open": "script.o"}]}), "entry popup: 'modal'"),
+    (broken(entry={"ringing": "input_boolean.r", "doors": [{"name": "Door"}]}), "entry doors[0]: needs a 'name' and an 'open' entity"),
+    (broken(entry={"ringing": "input_boolean.r", "doors": [{"name": "Door", "open": "switch.relay"}]}),
+     "entry doors[0] (Door): 'open' must be a script, lock, button or cover"),
 ])
 def test_bad_input_names_the_key(home, expected):
     errors = render.check(home)
@@ -131,3 +137,84 @@ def test_one_light_is_singular():
     assert "'light' if n == 1 else 'lights'" in summary["primary"]
     strip = next(c for c in cards if c.get("type") == "markdown" and "nobody home" in c.get("content", ""))
     assert "' light' if on == 1 else ' lights'" in strip["content"]
+
+
+ENTRY = FULL["entry"]
+
+
+@pytest.mark.parametrize("build,base", [(render.tablet, "/wall-panel"), (render.phone, "/phone-home")])
+def test_entry_page_and_strip(build, base):
+    dash = build(FULL)
+    page = next(v for v in dash["views"] if v["path"] == "entry")
+    cards = list(all_cards({"views": [page]}))
+    assert any(c.get("type") == "picture-entity" and c.get("camera_view") == "live" for c in cards)
+    buttons = [c for c in cards if (c.get("tap_action") or {}).get("confirmation")]
+    assert [b["primary"] for b in buttons][-2:] == ["Building door", "Gate"]
+    assert all(b["tap_action"]["perform_action"] == "script.turn_on" for b in buttons)
+    home = next(v for v in dash["views"] if v["path"] == "home")
+    strip = next(c for c in all_cards({"views": [home]}) if c.get("type") == "markdown" and "nobody home" in c.get("content", ""))
+    assert "🔔 Someone at the building door" in strip["content"]
+
+
+@pytest.mark.parametrize("build", [render.tablet, render.phone])
+def test_built_in_popup_covers_every_page_while_ringing(build):
+    dash = build(FULL)
+    for view in dash["views"]:
+        overlays = [c for c in view["sections"][0]["cards"] if c.get("type") == "custom:mod-card"]
+        assert len(overlays) == 1, f"{view['path']}: expected the entry pop-up"
+        o = overlays[0]
+        assert o["visibility"] == [{"condition": "state", "entity": FULL["entry"]["ringing"], "state": "on"}]
+        assert "position: fixed" in o["card_mod"]["style"]["."]
+        names = [c["primary"] for c in o["card"]["cards"][-1]["cards"]]
+        assert names == ["Building door", "Gate", "Dismiss"]
+    assert not any(c.get("primary") == "Someone at the building door" and c.get("type") == "custom:mushroom-template-card"
+                   and "navigation_path" in str(c.get("tap_action")) for c in all_cards(dash)), "no extra red card"
+
+
+def test_browser_mod_popup_gets_the_red_home_card_instead():
+    home = copy.deepcopy(FULL)
+    home["entry"]["popup"] = "browser_mod"
+    dash = render.tablet(home)
+    assert not any(c.get("type") == "custom:mod-card" for c in all_cards(dash))
+    ring = next(c for c in all_cards(dash) if c.get("primary") == "Someone at the building door")
+    assert ring["tap_action"]["navigation_path"] == "/wall-panel/entry"
+
+
+def test_entry_talk_stream_uses_webrtc_with_the_microphone():
+    home = copy.deepcopy(FULL)
+    home["entry"]["talk_stream"] = "street_panel"
+    page = next(v for v in render.tablet(home)["views"] if v["path"] == "entry")
+    cam = next(c for c in all_cards({"views": [page]}) if c["type"] == "custom:webrtc-camera")
+    assert cam["url"] == "street_panel" and "microphone" in cam["media"]
+
+
+def test_lock_opener_uses_lock_open():
+    home = copy.deepcopy(FULL)
+    home["entry"]["doors"] = [{"name": "Front door", "open": "lock.front_door"}]
+    page = next(v for v in render.tablet(home)["views"] if v["path"] == "entry")
+    button = next(c for c in page["sections"][0]["cards"] if c.get("primary") == "Front door")
+    assert button["tap_action"]["perform_action"] == "lock.open" and button["grid_options"]["columns"] == 12
+
+
+def test_one_door_gives_two_wide_buttons_two_doors_three():
+    home = copy.deepcopy(FULL)
+    home["entry"]["doors"] = home["entry"]["doors"][:1]
+    o = next(c for c in all_cards(render.tablet(home)) if c.get("type") == "custom:mod-card")
+    row = o["card"]["cards"][-1]
+    assert row["columns"] == 2 and [c["primary"] for c in row["cards"]] == ["Building door", "Dismiss"]
+    o = next(c for c in all_cards(render.tablet(FULL)) if c.get("type") == "custom:mod-card")
+    assert o["card"]["cards"][-1]["columns"] == 3
+
+
+def test_quick_replies_speak_through_the_doorbell():
+    home = copy.deepcopy(FULL)
+    home["entry"].update(speaker="media_player.doorbell_speaker", tts="tts.home", replies=["Coming!", "Leave it at the door"])
+    dash = render.tablet(home)
+    o = next(c for c in all_cards(dash) if c.get("type") == "custom:mod-card")
+    chips = o["card"]["cards"][2]["chips"]
+    assert [c["content"] for c in chips] == ["Coming!", "Leave it at the door"]
+    assert chips[0]["tap_action"] == {"action": "perform-action", "perform_action": "tts.speak", "target": {"entity_id": "tts.home"},
+                                      "data": {"media_player_entity_id": "media_player.doorbell_speaker", "message": "Coming!"}}
+    page = next(v for v in dash["views"] if v["path"] == "entry")
+    assert any(c.get("type") == "custom:mushroom-chips-card" for c in page["sections"][0]["cards"])
+    assert not any(c.get("type") == "custom:mushroom-chips-card" for c in all_cards(render.tablet(FULL))), "only when configured"
