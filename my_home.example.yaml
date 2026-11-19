@@ -27,6 +27,19 @@ panel:                               # optional — needs the kit's blueprints (
   rain_at: input_text.rain_at        # "rain from 17:40" in the attention strip
   last_arrival: input_text.last_arrival   # welcome greeting
 
+entry:                               # optional — doorbell / intercom page (see docs/entry.md)
+  name: Building door
+  ringing: input_boolean.entry_ringing        # turned on by the entry_ring blueprint
+  last_ring: input_datetime.entry_last_ring   # optional
+  camera: camera.street_panel                 # optional — live video
+  # talk_stream: street_panel                 # optional — go2rtc stream: two-way talk (WebRTC Camera card)
+  doors:                                      # one Open button each (entry_open script blueprint, or a lock/button/cover)
+    - name: Building door
+      open: script.open_building_door
+    - name: Gate
+      icon: mdi:gate
+      open: script.open_gate
+
 energy:                              # optional — adds the Energy page
   power_now: sensor.home_power       # current consumption (W)
   energy_today: sensor.home_energy_today   # optional (kWh)

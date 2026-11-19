@@ -32,6 +32,10 @@ With the Leaving feature, one tap turns the house off and starts a countdown. **
 
 <sub>Before → Leaving (only the way-out light stays on, music paused) → I'm staying (all five lights and both speakers back as they were). Taken with the kit's own Leaving blueprints.</sub>
 
+**Entry — doorbell, intercom, door and gate.** When someone rings, a pop-up covers whatever page is open: the live camera, quick replies and one button per door. Opening shows "✓ opened" for a few seconds, then closes it. Phones get a snapshot, with Face ID before anything opens. It works with any doorbell or intercom Home Assistant can see. See [docs/entry.md](docs/entry.md).
+
+![Tablet and phone while someone is ringing](docs/images/entry-popup.png)
+
 Every room gets its own page, on the tablet and on the phone:
 
 ![A room page on the tablet and on the phone](docs/images/room-page.png)
@@ -48,6 +52,10 @@ Home Assistant 2025.1 or newer, plus these frontend cards from HACS. Tested with
 | [navbar-card](https://github.com/joseluis9595/lovelace-navbar-card) | Bottom tab bar | Phone |
 | [kiosk-mode](https://github.com/NemesisRE/kiosk-mode) | Hide header/sidebar on the tablet | Tablet, if `kiosk: true` |
 | [Wall Panel](https://github.com/j-a-n/lovelace-wallpanel) | Photo screensaver | Tablet, if `screensaver` is set |
+| [browser_mod](https://github.com/thomasloven/hass-browser_mod) | Entry pop-up on other screens | Optional, see [Entry](docs/entry.md) |
+| [WebRTC Camera](https://github.com/AlexxIT/WebRTC) | Two-way talk at the door | Optional, with `talk_stream` |
+
+The Entry pop-up and the attention-strip accent use card-mod.
 
 ## Quick start
 
@@ -86,6 +94,15 @@ Small automations that make a wall panel feel alive. Import them, create the hel
 
 On Home, the Leaving button turns into a live countdown with **I'm staying** and **Arm now** while it runs.
 
+### Entry (doorbell / intercom)
+
+| Blueprint | What it does | Helpers | Import |
+|---|---|---|---|
+| **Entry — someone rang** | Ring → pop-up on every page, attention strip, phones with snapshot and Face-ID **Open** buttons; opened → "✓ opened" for a few seconds, then closes; no answer → closes after the ring time. Event, binary-sensor or button doorbells | Toggle "Entry ringing", Date and time "Entry last ring" | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fentry%2Fentry_ring.yaml) |
+| **Entry — open a door** *(script)* | One per door or gate: opens a lock (strike), presses a button, pulses a relay or opens a cover, then tells the ring automation | — | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fscript%2Fentry%2Fentry_open.yaml) |
+
+Hardware, setup, talking back, security and troubleshooting: [docs/entry.md](docs/entry.md).
+
 ## `my_home.yaml` reference
 
 ```yaml
@@ -114,6 +131,14 @@ energy:                              # optional → adds Energy
   power_now: sensor.home_power
   energy_today: sensor.home_energy_today
 
+entry:                               # optional → Entry page + pop-up (docs/entry.md)
+  name: Building door
+  ringing: input_boolean.entry_ringing
+  camera: camera.street_panel
+  doors:
+    - { name: Building door, open: script.open_building_door }
+    - { name: Gate, icon: mdi:gate, open: script.open_gate }
+
 rooms:
   - name: Living room
     icon: mdi:sofa
@@ -128,7 +153,7 @@ rooms:
 
 **Ignoring things:** create a label (Settings → Areas, labels & zones → Labels), e.g. *Ignore*, put it on any device or entity the attention strip should never mention — a car's window sensors, a fridge door, a tablet's battery — and set `ignore_label: ignore` (the label's id) in `my_home.yaml`.
 
-Room names must be unique and can't be *Home*, *Rooms*, *Security* or *Energy*.
+Room names must be unique and can't be *Home*, *Rooms*, *Security*, *Energy* or *Entry*.
 
 > **Admin toggle:** create it under Settings → Devices & services → Helpers → *Toggle*. Turn it on from another device when you need the header on the tablet to edit.
 
