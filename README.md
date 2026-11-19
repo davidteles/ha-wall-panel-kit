@@ -36,6 +36,8 @@ With the Leaving feature, one tap turns the house off and starts a countdown. **
 
 ![Tablet and phone while someone is ringing](docs/images/entry-popup.png)
 
+**Laundry.** When the wash is done, Home shows "ready to hang · outside recommended" with **Hung indoors / Hung outside / Nothing to hang**. Then it shows where the laundry is drying, and turns red if rain is coming while it's outside. See [docs/laundry.md](docs/laundry.md).
+
 Every room gets its own page, on the tablet and on the phone:
 
 ![A room page on the tablet and on the phone](docs/images/room-page.png)
@@ -130,6 +132,12 @@ panel:                               # optional → Leaving, note, rain, welcome
 energy:                              # optional → adds Energy
   power_now: sensor.home_power
   energy_today: sensor.home_energy_today
+
+laundry:                             # optional → laundry cards on Home (docs/laundry.md)
+  waiting: input_boolean.laundry_waiting
+  advice: input_text.laundry_drying_advice
+  place: input_select.laundry_drying_place
+  script: script.laundry_hung
 
 entry:                               # optional → Entry page + pop-up (docs/entry.md)
   name: Building door

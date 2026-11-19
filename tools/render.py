@@ -82,6 +82,7 @@ def alert_strip(home: dict) -> dict:
         "{%- set ns.items = ns.items + ['💡 ' ~ on ~ (' light' if on == 1 else ' lights') ~ ' on and nobody home'] -%}{%- endif -%}\n"
         + rain_line(home)
         + entry_line(home)
+        + laundry_line(home)
         + "{{ ns.items | join('<br>') }}"
     )
     return {
@@ -335,6 +336,110 @@ def entry_home_card(home: dict) -> list[dict]:
     }]
 
 
+# ---------------------------------------------------------------- laundry
+
+def laundry(home: dict) -> dict:
+    return home.get("laundry") or {}
+
+
+def laundry_line(home: dict) -> str:
+    l = laundry(home)
+    if not l.get("waiting"):
+        return ""
+    out = (f"{{%- if is_state('{l['waiting']}', 'on') -%}}"
+           "{%- set ns.items = ns.items + ['🧺 Laundry ready to hang'] -%}{%- endif -%}\n")
+    if l.get("rain_alert"):
+        out += (f"{{%- if is_state('{l['rain_alert']}', 'on') -%}}"
+                "{%- set ns.items = ['☔ Laundry is outside and rain is coming'] + ns.items -%}{%- endif -%}\n")
+    return out
+
+
+def _state(entity: str, state) -> dict:
+    return {"condition": "state", "entity": entity, "state": state}
+
+
+def _laundry_button(name: str, icon: str, place: str, script: str, visibility: list, color: str = "blue",
+                    secondary: str = "", columns: int = 4, confirm: str | None = None) -> dict:
+    """A button with no `entity`: tapping its icon can never toggle a helper by accident."""
+    action = {"action": "perform-action", "perform_action": script, "data": {"place": place}}
+    if confirm:
+        action["confirmation"] = {"text": confirm}
+    card = {"type": "custom:mushroom-template-card", "primary": name, "icon": icon, "color": color,
+            "layout": "vertical", "tap_action": action, "icon_tap_action": action,
+            "visibility": visibility, "grid_options": {"columns": columns}}
+    if secondary:
+        card["secondary"] = secondary
+    return card
+
+
+def laundry_cards(home: dict) -> list[dict]:
+    """Laundry on Home: the advice and Hung indoors / outside / nothing while it waits; where it dries afterwards."""
+    l = laundry(home)
+    if not l.get("waiting"):
+        return []
+    waiting = [_state(l["waiting"], "on")]
+    adv = (f"{{% set a = (states('{l['advice']}') ~ '||||').split('|') %}}" if l.get("advice") else "{% set a = ['', ''] %}")
+    finished = (f"{{% set ts = state_attr('{l['finished_at']}', 'timestamp') %}}{{{{ (' · finished ' ~ ts | timestamp_custom('%H:%M')) if ts else '' }}}}"
+                if l.get("finished_at") else "")
+    cards: list[dict] = [{
+        "type": "custom:mushroom-template-card",
+        "icon": "mdi:washing-machine-alert",
+        "color": "blue",
+        "primary": adv + "Laundry ready to hang{{ {'outdoors': ' · outside recommended', 'indoors': ' · indoors recommended'}.get(a[0], '') }}",
+        "secondary": adv + "{{ a[1] if a[1] else 'Choose where you hung it' }}" + finished,
+        "multiline_secondary": True,
+        "tap_action": {"action": "none"}, "icon_tap_action": {"action": "none"},
+        "visibility": waiting, "grid_options": {"columns": 12},
+    }]
+    if not (l.get("place") and l.get("script")):
+        # Without the dropdown: one "it's out" button that clears the waiting toggle.
+        off = {"action": "perform-action", "perform_action": "input_boolean.turn_off", "target": {"entity_id": l["waiting"]}}
+        cards[0].update({"secondary": "Tap when it's out of the machine" + finished, "tap_action": off, "icon_tap_action": off})
+        return cards
+    script, place = l["script"], l["place"]
+    rec = lambda choice, other: adv + f"{{{{ 'Recommended' if a[0] == '{choice}' else '{other}' }}}}"
+    cards += [
+        _laundry_button("Hung indoors", "mdi:home", "Indoors", script, waiting, secondary=rec("indoors", "")),
+        _laundry_button("Hung outside", "mdi:weather-sunny", "Outside", script, waiting, secondary=rec("outdoors", "")),
+        _laundry_button("Nothing to hang", "mdi:close-circle-outline", "Not hung", script, waiting, color="grey",
+                        secondary="e.g. drum clean", confirm="Nothing to hang from this cycle?"),
+    ]
+    if l.get("on_rack"):
+        not_set = [_state(l["on_rack"], "on"), _state(place, l.get("not_set_option", "Not set"))]
+        cards += [{
+            "type": "custom:mushroom-template-card", "icon": "mdi:hanger", "color": "orange",
+            "primary": "Laundry on the rack — where is it drying?",
+            "secondary": "Indoors or outside, so the right things happen",
+            "tap_action": {"action": "none"}, "icon_tap_action": {"action": "none"},
+            "visibility": not_set, "grid_options": {"columns": 12},
+        },
+            _laundry_button("Indoors", "mdi:home", "Indoors", script, not_set, columns=6),
+            _laundry_button("Outside", "mdi:weather-sunny", "Outside", script, not_set, columns=6)]
+        change = {"action": "perform-action", "perform_action": script, "data": {"place": "Change"},
+                  "confirmation": {"text": "Change where the laundry is drying?"}}
+        drying = [_state(l["on_rack"], "on"), _state(place, ["Indoors", "Outside"])]
+        if l.get("rain_alert"):
+            drying.append(_state(l["rain_alert"], "off"))
+        cards.append({
+            "type": "custom:mushroom-template-card", "color": "grey",
+            "icon": f"{{{{ 'mdi:home' if is_state('{place}', 'Indoors') else 'mdi:weather-sunny' }}}}",
+            "primary": f"Drying {{{{ 'indoors' if is_state('{place}', 'Indoors') else 'outside' }}}}",
+            "secondary": f"Tap to change to {{{{ 'outside' if is_state('{place}', 'Indoors') else 'indoors' }}}}",
+            "tap_action": change, "icon_tap_action": change,
+            "visibility": drying, "grid_options": {"columns": 12},
+        })
+    if l.get("rain_alert"):
+        inside = {"action": "perform-action", "perform_action": script, "data": {"place": "Indoors"}}
+        cards.append({
+            "type": "custom:mushroom-template-card", "icon": "mdi:weather-pouring", "color": "red",
+            "primary": "Laundry is outside — rain is coming",
+            "secondary": "Tap when it's indoors",
+            "tap_action": inside, "icon_tap_action": inside,
+            "visibility": [_state(l["rain_alert"], "on")], "grid_options": {"columns": 12},
+        })
+    return cards
+
+
 def panel_cards(home: dict) -> list[dict]:
     """Welcome greeting, note and Leaving button + countdown (from the kit's blueprints)."""
     p = panel(home)
@@ -452,7 +557,8 @@ def home_sections(home: dict, phone: bool) -> list[dict]:
                           {"type": "spacer"}, {"type": "weather"}]},
             {"alignment": "center", "segments": [{"type": "icon", "icon": "mdi:calendar"}, {"type": "date"}]},
         ]}
-    first = entry_home_card(home) + [weather] + inside_range(home) + panel_cards(home) + [alert_strip(home), lights_summary(home)]
+    first = (entry_home_card(home) + [weather] + inside_range(home) + panel_cards(home) + [alert_strip(home)]
+             + laundry_cards(home) + [lights_summary(home)])
     if home.get("alarm"):
         first.append(tile(home["alarm"], 6, name="Alarm"))
     sections = [{"type": "grid", "cards": first}]
@@ -606,6 +712,7 @@ ROOM_LISTS = ("lights", "covers", "other")
 RESERVED = {"home", "rooms", "security", "energy", "entry"}
 ENTRY_SINGLE = ("ringing", "last_ring", "camera", "speaker", "tts")
 POPUPS = ("card", "browser_mod", "none")
+LAUNDRY_KEYS = ("waiting", "finished_at", "advice", "place", "script", "on_rack", "rain_alert")
 OPENERS = ("script", "lock", "button", "input_button", "cover")
 
 
@@ -624,6 +731,20 @@ def check(home) -> list[str]:
             entity(key, home[key])
     for i, person in enumerate(home.get("people") or []):
         entity(f"people[{i}]", person)
+    lau = home.get("laundry")
+    if lau is not None:
+        if not isinstance(lau, dict):
+            errors.append("laundry: must be a mapping (waiting:, place:, script: …)")
+        else:
+            if not lau.get("waiting"):
+                errors.append("laundry: 'waiting' is missing (the \"Laundry waiting\" toggle)")
+            for key in LAUNDRY_KEYS:
+                if lau.get(key):
+                    entity(f"laundry {key}", lau[key])
+            if lau.get("place") and not lau.get("script"):
+                errors.append("laundry: with 'place', also set 'script' (a script made from the Laundry hung blueprint)")
+            if lau.get("script") and not str(lau["script"]).startswith("script."):
+                errors.append(f"laundry script: {lau['script']!r} must be a script (script.…)")
     e = home.get("entry")
     if e is not None:
         if not isinstance(e, dict):

@@ -27,6 +27,15 @@ panel:                               # optional — needs the kit's blueprints (
   rain_at: input_text.rain_at        # "rain from 17:40" in the attention strip
   last_arrival: input_text.last_arrival   # welcome greeting
 
+laundry:                             # optional — laundry cards on Home (see docs/laundry.md)
+  waiting: input_boolean.laundry_waiting            # from the "Laundry done" blueprint
+  finished_at: input_datetime.washer_finished_at    # optional
+  advice: input_text.laundry_drying_advice          # optional — "Laundry drying advice" blueprint
+  place: input_select.laundry_drying_place          # optional — Hung indoors / outside / nothing
+  script: script.laundry_hung                       # with place — "Laundry hung" script blueprint
+  on_rack: input_boolean.laundry_on_drying_rack     # optional — "where is it drying?" / change
+  rain_alert: input_boolean.laundry_rain_alert      # optional — red card when rain is coming
+
 entry:                               # optional — doorbell / intercom page (see docs/entry.md)
   name: Building door
   ringing: input_boolean.entry_ringing        # turned on by the entry_ring blueprint

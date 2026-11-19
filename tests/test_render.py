@@ -98,6 +98,9 @@ def broken(**changes) -> dict:
     (broken(alarm="alarm panel"), "alarm: 'alarm panel' is not an entity id"),
     (broken(people=["person.alex", "Sam"]), "people[1]: 'Sam' is not an entity id"),
     (broken(entry={"doors": [{"name": "Door", "open": "script.open"}]}), "entry: 'ringing' is missing"),
+    (broken(laundry={"place": "input_select.p", "script": "script.s"}), "laundry: 'waiting' is missing"),
+    (broken(laundry={"waiting": "input_boolean.w", "place": "input_select.p"}), "laundry: with 'place', also set 'script'"),
+    (broken(laundry={"waiting": "input_boolean.w", "place": "input_select.p", "script": "automation.x"}), "laundry script: 'automation.x' must be a script"),
     (broken(entry={"ringing": "input_boolean.r"}), "entry doors: list at least one door"),
     (broken(entry={"ringing": "input_boolean.r", "popup": "modal", "doors": [{"name": "D", "open": "script.o"}]}), "entry popup: 'modal'"),
     (broken(entry={"ringing": "input_boolean.r", "doors": [{"name": "Door"}]}), "entry doors[0]: needs a 'name' and an 'open' entity"),
@@ -218,3 +221,51 @@ def test_quick_replies_speak_through_the_doorbell():
     page = next(v for v in dash["views"] if v["path"] == "entry")
     assert any(c.get("type") == "custom:mushroom-chips-card" for c in page["sections"][0]["cards"])
     assert not any(c.get("type") == "custom:mushroom-chips-card" for c in all_cards(render.tablet(FULL))), "only when configured"
+
+
+LAUNDRY = FULL["laundry"]
+
+
+def laundry_cards_of(dash):
+    home = next(v for v in dash["views"] if v["path"] == "home")
+    return [c for c in all_cards({"views": [home]}) if "laundry" in str(c.get("visibility", "")) or "laundry" in str(c.get("tap_action", ""))]
+
+
+@pytest.mark.parametrize("build", [render.tablet, render.phone])
+def test_laundry_cards_on_home(build):
+    cards = laundry_cards_of(build(FULL))
+    names = [c.get("primary", "") for c in cards]
+    assert any("Laundry ready to hang" in n for n in names)
+    for name, place in (("Hung indoors", "Indoors"), ("Hung outside", "Outside"), ("Nothing to hang", "Not hung")):
+        b = next(c for c in cards if c.get("primary") == name)
+        assert b["tap_action"]["perform_action"] == LAUNDRY["script"] and b["tap_action"]["data"] == {"place": place}
+        assert b["visibility"] == [{"condition": "state", "entity": LAUNDRY["waiting"], "state": "on"}]
+    assert "Laundry on the rack — where is it drying?" in names
+    assert any(n.startswith("Drying {{") for n in names)
+    assert "Laundry is outside — rain is coming" in names
+
+
+def test_laundry_buttons_have_no_entity_and_the_icon_does_the_same():
+    """A Mushroom template card with an entity toggles it when the icon is tapped: never on these."""
+    for c in laundry_cards_of(render.tablet(FULL)):
+        assert "entity" not in c, c.get("primary")
+        assert c.get("icon_tap_action") == c.get("tap_action"), c.get("primary")
+
+
+def test_laundry_strip_lines():
+    home = next(v for v in render.tablet(FULL)["views"] if v["path"] == "home")
+    strip = next(c for c in all_cards({"views": [home]}) if c.get("type") == "markdown" and "nobody home" in c.get("content", ""))
+    assert "🧺 Laundry ready to hang" in strip["content"] and "☔ Laundry is outside and rain is coming" in strip["content"]
+
+
+def test_laundry_without_the_dropdown_is_one_tap_when_its_out():
+    home = copy.deepcopy(FULL)
+    home["laundry"] = {"waiting": "input_boolean.laundry_waiting"}
+    cards = laundry_cards_of(render.tablet(home))
+    assert len(cards) == 1
+    assert cards[0]["tap_action"] == {"action": "perform-action", "perform_action": "input_boolean.turn_off",
+                                      "target": {"entity_id": "input_boolean.laundry_waiting"}}
+
+
+def test_no_laundry_section_no_laundry_cards():
+    assert not laundry_cards_of(render.tablet(ONE_ROOM))
