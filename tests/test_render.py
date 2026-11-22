@@ -316,3 +316,26 @@ def test_rack_buttons_are_moves_not_answers():
         assert b["tap_action"]["data"]["step"] == "move", name
     change = next(c for c in cards if str(c.get("primary", "")).startswith("Drying {{"))
     assert change["tap_action"]["data"] == {"place": "Change", "step": "move"}
+
+
+def test_needs_lists_only_cards_for_enabled_features():
+    small = render.needs(ONE_ROOM)
+    assert "Mushroom" in small and "kiosk-mode" not in small and "Wall Panel (" not in small
+    full = render.needs(FULL)
+    if (FULL.get("tablet") or {}).get("kiosk"):
+        assert "kiosk-mode" in full
+
+
+def test_needs_lists_entities_and_a_template_check():
+    out = render.needs(ONE_ROOM)
+    for e in render.entities_in(ONE_ROOM):
+        assert f"  - {e}" in out
+    assert "Developer tools → Template" in out and "reject('in', states" in out
+
+
+def test_needs_writes_nothing(tmp_path, capsys):
+    src = tmp_path / "home.yaml"
+    src.write_text(yaml.safe_dump(ONE_ROOM))
+    render.main([str(src), "--needs", "--out", str(tmp_path / "out")])
+    assert not (tmp_path / "out").exists()
+    assert "Cards to install" in capsys.readouterr().out
