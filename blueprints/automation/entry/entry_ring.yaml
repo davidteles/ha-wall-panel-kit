@@ -242,7 +242,10 @@ actions:
                 - action: "{{ repeat.item }}"
                   continue_on_error: true
                   data:
-                    title: "✅ {{ trigger.event.data.door | default(name) }} opened"
+                    title: >-
+                      {% set d = trigger.event.data.door | default(name) %}
+                      {% set c = trigger.event.data.confirmed | default('unknown') %}
+                      {{ '✅ ' ~ d ~ ' opened' if c == 'yes' else ('⚠️ ' ~ d ~ ": open was sent, but it didn't confirm" if c == 'no' else '➡️ Open sent to ' ~ d) }}
                     message: "at {{ now().strftime('%H:%M') }}"
                     data: { tag: entry-ring, group: entry, push: { interruption-level: passive } }
           - delay: "{{ close_after_open }}"

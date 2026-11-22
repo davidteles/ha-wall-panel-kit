@@ -81,7 +81,7 @@ async def test_phone_open_pulses_the_relay_and_closes_everything(hass, entry, la
     await settle(hass)
     assert len(entry["relay_off"]) == 1
     assert hass.states.get(RINGING).state == "on", "the pop-up stays a moment after opening"
-    assert entry["phone"][-1].data["title"] == "✅ Building door opened"
+    assert entry["phone"][-1].data["title"] == "➡️ Open sent to Building door", "no sensor confirms it: say sent, not opened"
     assert entry["phone"][-1].data["data"]["push"] == {"interruption-level": "passive"}
     assert "actions" not in entry["phone"][-1].data["data"], "no more Open buttons"
     await later(seconds=10)
@@ -153,3 +153,26 @@ async def test_lock_with_open_support_uses_open(hass, blueprints):
     await hass.services.async_call("script", "strike", {}, blocking=True)
     await hass.services.async_call("script", "flat", {}, blocking=True)
     assert len(opened) == 1 and len(unlocked) == 1
+
+
+@pytest.mark.parametrize("door_state,title", [("on", "✅ Front door opened"),
+                                              ("off", "⚠️ Front door: open was sent, but it didn't confirm")])
+async def test_confirmation_sensor_decides_opened_or_not(hass, blueprints, later, door_state, title):
+    assert await async_setup_component(hass, "input_boolean", {"input_boolean": {"entry_ringing": {}}})
+    phone = async_mock_service(hass, "notify", "phone")
+    async_mock_service(hass, "lock", "unlock")
+    hass.states.async_set("lock.front", "locked", {"supported_features": 0})
+    hass.states.async_set("binary_sensor.front_contact", "off", {"device_class": "door"})
+    hass.states.async_set(BELL, "unknown", {"event_types": ["ring"], "device_class": "doorbell"})
+    await blueprints(
+        scripts={"open_front": {"use_blueprint": {"path": "entry/entry_open.yaml", "input": {
+            "door_name": "Front door", "opener": "lock.front", "confirm": "binary_sensor.front_contact", "confirm_seconds": 5}}}},
+        automations=[{"alias": "entry ring", "use_blueprint": {"path": "entry/entry_ring.yaml", "input": {
+            "name": "Front door", "ring": [BELL], "ringing": RINGING, "doors": ["script.open_front"],
+            "notify_action": "notify.phone"}}}])
+    await hass.services.async_call("script", "turn_on", {"entity_id": "script.open_front"}, blocking=True)
+    await settle(hass)
+    hass.states.async_set("binary_sensor.front_contact", door_state, {"device_class": "door"})
+    await later(seconds=6)
+    await settle(hass)
+    assert phone and phone[-1].data["title"] == title
