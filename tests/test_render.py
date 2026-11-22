@@ -159,11 +159,15 @@ def test_entry_page_and_strip(build, base):
     assert "🔔 Someone at the building door" in strip["content"]
 
 
+def is_entry_popup(c):
+    return c.get("type") == "custom:mod-card" and any(v.get("state") == "on" for v in c.get("visibility", []))
+
+
 @pytest.mark.parametrize("build", [render.tablet, render.phone])
 def test_built_in_popup_covers_every_page_while_ringing(build):
     dash = build(FULL)
     for view in dash["views"]:
-        overlays = [c for c in view["sections"][0]["cards"] if c.get("type") == "custom:mod-card"]
+        overlays = [c for c in view["sections"][0]["cards"] if is_entry_popup(c)]
         assert len(overlays) == 1, f"{view['path']}: expected the entry pop-up"
         o = overlays[0]
         assert o["visibility"] == [{"condition": "state", "entity": FULL["entry"]["ringing"], "state": "on"}]
@@ -178,7 +182,7 @@ def test_browser_mod_popup_gets_the_red_home_card_instead():
     home = copy.deepcopy(FULL)
     home["entry"]["popup"] = "browser_mod"
     dash = render.tablet(home)
-    assert not any(c.get("type") == "custom:mod-card" for c in all_cards(dash))
+    assert not any(is_entry_popup(c) for c in all_cards(dash))
     ring = next(c for c in all_cards(dash) if c.get("primary") == "Someone at the building door")
     assert ring["tap_action"]["navigation_path"] == "/wall-panel/entry"
 
@@ -202,10 +206,10 @@ def test_lock_opener_uses_lock_open():
 def test_one_door_gives_two_wide_buttons_two_doors_three():
     home = copy.deepcopy(FULL)
     home["entry"]["doors"] = home["entry"]["doors"][:1]
-    o = next(c for c in all_cards(render.tablet(home)) if c.get("type") == "custom:mod-card")
+    o = next(c for c in all_cards(render.tablet(home)) if is_entry_popup(c))
     row = o["card"]["cards"][-1]
     assert row["columns"] == 2 and [c["primary"] for c in row["cards"]] == ["Building door", "Dismiss"]
-    o = next(c for c in all_cards(render.tablet(FULL)) if c.get("type") == "custom:mod-card")
+    o = next(c for c in all_cards(render.tablet(FULL)) if is_entry_popup(c))
     assert o["card"]["cards"][-1]["columns"] == 3
 
 
@@ -213,7 +217,7 @@ def test_quick_replies_speak_through_the_doorbell():
     home = copy.deepcopy(FULL)
     home["entry"].update(speaker="media_player.doorbell_speaker", tts="tts.home", replies=["Coming!", "Leave it at the door"])
     dash = render.tablet(home)
-    o = next(c for c in all_cards(dash) if c.get("type") == "custom:mod-card")
+    o = next(c for c in all_cards(dash) if is_entry_popup(c))
     chips = o["card"]["cards"][2]["chips"]
     assert [c["content"] for c in chips] == ["Coming!", "Leave it at the door"]
     assert chips[0]["tap_action"] == {"action": "perform-action", "perform_action": "tts.speak", "target": {"entity_id": "tts.home"},
@@ -339,3 +343,33 @@ def test_needs_writes_nothing(tmp_path, capsys):
     render.main([str(src), "--needs", "--out", str(tmp_path / "out")])
     assert not (tmp_path / "out").exists()
     assert "Cards to install" in capsys.readouterr().out
+def takeover_cards(dash):
+    return [c for c in all_cards(dash) if c.get("type") == "custom:mod-card"
+            and any(v.get("state") == ["pending", "triggered"] for v in c.get("visibility", []))]
+
+
+def test_alarm_takeover_on_every_page_only_when_asked():
+    home = copy.deepcopy(FULL)
+    home["alarm_takeover"] = {"countdown": "timer.alarm_countdown"}
+    for dash in (render.tablet(home), render.phone(home)):
+        for view in dash["views"]:
+            assert len(takeover_cards({"views": [view]})) == 1, view["path"]
+    home.pop("alarm_takeover")
+    assert not takeover_cards(render.tablet(home))
+
+
+def test_alarm_takeover_shows_the_pin_pad_and_the_countdown():
+    home = copy.deepcopy(FULL)
+    home["alarm_takeover"] = {"countdown": "timer.alarm_countdown"}
+    card = takeover_cards(render.tablet(home))[0]
+    stack = card["card"]["cards"]
+    assert stack[1]["conditions"][0]["entity"] == "timer.alarm_countdown"
+    assert stack[2]["type"] == "alarm-panel" and stack[2]["entity"] == home["alarm"]
+    assert "open_sensors" in stack[0]["secondary"], "says what was opened"
+
+
+def test_alarm_takeover_needs_an_alarm_and_a_timer():
+    home = copy.deepcopy(ONE_ROOM)
+    home["alarm_takeover"] = {"countdown": "input_number.x"}
+    errors = render.check(home)
+    assert any("also set 'alarm'" in e for e in errors) and any("must be a timer" in e for e in errors)
