@@ -17,6 +17,11 @@ blueprint:
 
     After opening it fires the event `wall_panel_entry_opened`, so the ring
     automation closes the pop-up and clears the phones.
+
+
+    **Sent is not opened.** Without a confirmation sensor the phones say
+    "Open sent". Add the door's contact sensor (or the lock or cover itself)
+    under *Confirms it opened*, and they say "opened" only when it really did.
   domain: script
   source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/script/entry/entry_open.yaml
   input:
@@ -34,6 +39,18 @@ blueprint:
       default: 2
       selector: { number: { min: 0.5, max: 15, step: 0.5, unit_of_measurement: s } }
 
+    confirm:
+      name: Confirms it opened (optional)
+      description: >-
+        A door contact (on = open), or the lock / cover itself (unlocked, open or
+        opening). Without it, the phones are told the command was sent, not that
+        the door opened.
+      default: []
+      selector: { entity: { domain: [binary_sensor, lock, cover] } }
+    confirm_seconds:
+      name: Wait this long for the confirmation
+      default: 10
+      selector: { number: { min: 2, max: 60, unit_of_measurement: s } }
 mode: single
 icon: mdi:door-open
 
@@ -42,6 +59,9 @@ variables:
   opener: !input opener
   pulse: !input pulse
   domain: "{{ opener.split('.')[0] }}"
+  confirm_entity: !input confirm
+  confirm_seconds: !input confirm_seconds
+  has_confirm: "{{ confirm_entity not in ['', none, []] }}"
 
 sequence:
   - choose:
@@ -68,7 +88,21 @@ sequence:
         sequence:
           - action: cover.open_cover
             target: { entity_id: "{{ opener }}" }
-  - event: wall_panel_entry_opened
-    event_data:
-      door: "{{ door_name }}"
-      entity_id: "{{ opener }}"
+  - if:
+      - condition: template
+        value_template: "{{ has_confirm }}"
+    then:
+      - wait_template: >-
+          {{ is_state(confirm_entity, 'on') or states(confirm_entity) in ['unlocked', 'open', 'opening'] }}
+        timeout: { seconds: "{{ confirm_seconds | int(10) }}" }
+      - event: wall_panel_entry_opened
+        event_data:
+          door: "{{ door_name }}"
+          entity_id: "{{ opener }}"
+          confirmed: "{{ 'yes' if wait.completed else 'no' }}"
+    else:
+      - event: wall_panel_entry_opened
+        event_data:
+          door: "{{ door_name }}"
+          entity_id: "{{ opener }}"
+          confirmed: unknown
