@@ -265,6 +265,24 @@ def test_laundry_strip_lines():
     assert "🧺 Laundry ready to hang" in strip["content"] and "☔ Laundry is outside and rain is coming" in strip["content"]
 
 
+def test_extra_alerts_join_the_strip():
+    home = copy.deepcopy(ONE_ROOM)
+    home["extra_alerts"] = [{"entity": "binary_sensor.tank", "text": "🪣 Tank full — it's time"},
+                            {"entity": "sensor.filter", "state": "replace", "text": "Filter"}]
+    view = next(v for v in render.tablet(home)["views"] if v["path"] == "home")
+    strip = next(c for c in all_cards({"views": [view]}) if c.get("type") == "markdown" and "nobody home" in c.get("content", ""))
+    assert "is_state('binary_sensor.tank', 'on')" in strip["content"]
+    assert "Tank full — it\\'s time" in strip["content"], "quotes are escaped for Jinja"
+    assert "is_state('sensor.filter', 'replace')" in strip["content"]
+
+
+def test_extra_alerts_need_an_entity_and_text():
+    home = copy.deepcopy(ONE_ROOM)
+    home["extra_alerts"] = [{"text": "no entity"}, {"entity": "not an id", "text": "x"}]
+    errors = render.check(home)
+    assert any("extra_alerts[0]" in e for e in errors) and any("extra_alerts[1]" in e for e in errors)
+
+
 def test_laundry_without_the_dropdown_is_one_tap_when_its_out():
     home = copy.deepcopy(FULL)
     home["laundry"] = {"waiting": "input_boolean.laundry_waiting"}

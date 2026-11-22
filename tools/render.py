@@ -83,6 +83,7 @@ def alert_strip(home: dict) -> dict:
         + rain_line(home)
         + entry_line(home)
         + laundry_line(home)
+        + extra_lines(home)
         + "{{ ns.items | join('<br>') }}"
     )
     return {
@@ -92,6 +93,17 @@ def alert_strip(home: dict) -> dict:
         "grid_options": {"columns": 12},
         "card_mod": {"style": "ha-card { border-left: 4px solid var(--warning-color) !important; }"},
     }
+
+
+def extra_lines(home: dict) -> str:
+    """Your own lines for the attention strip: `extra_alerts: [{entity, text, state?}]`."""
+    out = ""
+    for a in home.get("extra_alerts") or []:
+        state = str(a.get("state", "on"))
+        text = str(a["text"]).replace("\\", "\\\\").replace("'", "\\'")
+        out += (f"{{%- if is_state('{a['entity']}', '{state}') -%}}"
+                f"{{%- set ns.items = ns.items + ['{text}'] -%}}{{%- endif -%}}\n")
+    return out
 
 
 def panel(home: dict) -> dict:
@@ -785,6 +797,16 @@ def check(home) -> list[str]:
                     if isinstance(door["open"], str) and door["open"].split(".")[0] not in OPENERS:
                         errors.append(f"entry doors[{j}] ({door['name']}): 'open' must be a script, lock, button or cover "
                                       "(for a relay switch, use the entry_open script blueprint)")
+    extra = home.get("extra_alerts")
+    if extra is not None:
+        if not isinstance(extra, list):
+            errors.append("extra_alerts: must be a list of {entity, text}")
+        else:
+            for k, a in enumerate(extra):
+                if not isinstance(a, dict) or not a.get("entity") or not a.get("text"):
+                    errors.append(f"extra_alerts[{k}]: needs an 'entity' and a 'text'")
+                    continue
+                entity(f"extra_alerts[{k}]", a["entity"])
     rooms = home.get("rooms") or []
     if not isinstance(rooms, list):
         return errors + ["'rooms' must be a list (each item starts with '- name:')"]
