@@ -6,6 +6,8 @@ title: Home
 weather: weather.home
 calendar: calendar.family            # optional — shows "Coming up"
 alarm: alarm_control_panel.home      # optional — adds the Security page
+alarm_takeover:                      # optional — red PIN pop-up on every page while the alarm counts down or goes off
+  countdown: timer.alarm_countdown   # optional — "goes off in 0:27" (Alarm countdown blueprint)
 ignore_label: ignore                 # optional — label id of things the attention strip should skip
                                      # (put it on a device or entity: a car's windows, a fridge door…)
 extra_alerts:                        # optional — your own lines in the attention strip
