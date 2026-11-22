@@ -159,6 +159,8 @@ rooms:
     other: [switch.coffee_machine]
 ```
 
+**Your own alerts:** anything else that should nag from the attention strip goes in `extra_alerts` — an entity, the text, and optionally the state that triggers it (default `on`), e.g. a dehumidifier's tank-full sensor: `- {entity: binary_sensor.dehumidifier_water_tank, text: "🪣 Dehumidifier tank full — empty it"}`.
+
 **Ignoring things:** create a label (Settings → Areas, labels & zones → Labels), e.g. *Ignore*, put it on any device or entity the attention strip should never mention — a car's window sensors, a fridge door, a tablet's battery — and set `ignore_label: ignore` (the label's id) in `my_home.yaml`.
 
 Room names must be unique and can't be *Home*, *Rooms*, *Security*, *Energy* or *Entry*.
