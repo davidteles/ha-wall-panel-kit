@@ -68,6 +68,7 @@ The Entry pop-up and the attention-strip accent use card-mod.
    pip install -r tools/requirements.txt
    python tools/render.py
    ```
+   **Not sure what you still need?** `python tools/render.py --needs` lists the cards to install for the features you turned on, every entity your file uses, and a template to paste in Developer tools → Template that names any entity your Home Assistant doesn't have. It writes nothing.
 4. **Create the dashboards** in Home Assistant: Settings → Dashboards → **Add dashboard** → *New dashboard from scratch*.
    - Name the tablet one **Wall Panel** with the URL `wall-panel`, and the phone one **Phone** with `phone-home` (the tab bar and back arrows use these URLs).
    - Open each one → ✏️ → ⋮ → **Raw configuration editor**, replace everything with the contents of `out/tablet.yaml` or `out/phone.yaml`, and save.

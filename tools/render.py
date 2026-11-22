@@ -16,6 +16,7 @@ Both layouts share the same cards; only the frame differs:
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -944,6 +945,57 @@ def write(home: dict, out: Path) -> list[Path]:
     return written
 
 
+CARDS = [  # (match in the rendered dashboards, card to install)
+    ("custom:mushroom-", "Mushroom"),
+    ("custom:clock-weather-card", "Clock Weather Card (v3 or newer)"),
+    ("custom:navbar-card", "navbar-card"),
+    ("custom:mod-card", "card-mod"),
+    ("card_mod", "card-mod"),
+    ("custom:webrtc-camera", "WebRTC Camera"),
+]
+
+
+def entities_in(value) -> list[str]:
+    """Every entity id written in my_home.yaml, in order, once."""
+    found: list[str] = []
+    def walk(v):
+        if isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+        elif isinstance(v, str) and ENTITY.match(v) and v.split(".")[0] not in ("media_source",) and v not in found:
+            found.append(v)
+    walk(value)
+    return found
+
+
+def needs(home: dict) -> str:
+    """What this my_home.yaml needs in Home Assistant: cards for the features it uses, and its entities."""
+    text = json.dumps([tablet(home), phone(home)])
+    cards = []
+    for match, card in CARDS:
+        if match in text and card not in cards:
+            cards.append(card)
+    t = home.get("tablet") or {}
+    if t.get("kiosk"):
+        cards.append("kiosk-mode (tablet: kiosk: true)")
+    if t.get("screensaver"):
+        cards.append("Wall Panel (tablet: screensaver)")
+    if (home.get("entry") or {}).get("popup") == "browser_mod":
+        cards.append("browser_mod (entry: popup: browser_mod)")
+    ents = entities_in(home)
+    probe = ("{%- set ids = " + json.dumps(ents) + " -%}\n"
+             "{%- set missing = ids | reject('in', states | map(attribute='entity_id') | list) | list -%}\n"
+             "{{ 'All ' ~ ids | count ~ ' entities exist.' if not missing else 'Missing: ' ~ missing | join(', ') }}")
+    lines = ["Cards to install from HACS (only for the features you turned on):"]
+    lines += [f"  - {c}" for c in cards] or ["  - none"]
+    lines += ["", f"Entities used by my_home.yaml ({len(ents)}):"] + [f"  - {e}" for e in ents]
+    lines += ["", "Check they exist: paste this in Home Assistant → Developer tools → Template:", "", probe]
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> None:
     args = list(sys.argv[1:] if argv is None else argv)
     out = ROOT / "out"
@@ -951,11 +1003,16 @@ def main(argv: list[str] | None = None) -> None:
         i = args.index("--out")
         out = Path(args[i + 1]).resolve()
         del args[i:i + 2]
+    show_needs = "--needs" in args
+    args = [a for a in args if a != "--needs"]
     source = Path(args[0]) if args else ROOT / "my_home.yaml"
     if not source.exists():
         sys.exit(f"{source} not found — copy my_home.example.yaml to my_home.yaml first.")
     home = yaml.safe_load(source.read_text())
     validate(home)
+    if show_needs:
+        print(needs(home))
+        return
     had_previous = (out / "tablet.yaml").exists()
     for path in write(home, out):
         print(f"wrote {path}")
