@@ -321,9 +321,77 @@ ha-tile-icon, mushroom-shape-icon { --tile-icon-size: 64px; --icon-size: 64px; -
     }]
 
 
+# Landscape tablets: the message and countdown on the left, the PIN pad on the right.
+ALARM_LANDSCAPE = """@media (orientation: landscape) and (min-width: 700px) and (max-height: 920px) {
+  #root { display: grid !important; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; column-gap: 24px; align-items: center; }
+  #root > *:nth-child(1) { grid-column: 1; grid-row: 1; }
+  #root > *:nth-child(2) { grid-column: 1; grid-row: 2; align-self: start; }
+  #root > *:nth-child(3) { grid-column: 2; grid-row: 1 / span 2; }
+}"""
+
+
+def alarm_overlay(home: dict) -> list[dict]:
+    """Alarm takeover: while the alarm counts down to going off (pending) or is going off (triggered),
+    a red pop-up covers every page with what was opened, the countdown and the PIN pad."""
+    cfg = home.get("alarm_takeover")
+    alarm = home.get("alarm")
+    if not cfg or not alarm:
+        return []
+    cfg = cfg if isinstance(cfg, dict) else {}
+    what = (f"{{% set os = state_attr('{alarm}', 'open_sensors') or {{}} %}}"
+            "{% set n = os.keys() | map('state_attr', 'friendly_name') | reject('none') | list %}"
+            "{% set what = n | join(', ') if n else 'a door or sensor' %}")
+    header = {
+        "type": "custom:mushroom-template-card",
+        "primary": f"{{{{ 'Enter your PIN' if is_state('{alarm}', 'pending') else 'The alarm is going off' }}}}",
+        "secondary": what + f"{{% if is_state('{alarm}', 'pending') %}}{{{{ what[:1] | upper ~ what[1:] }}}} opened while the alarm was on."
+                     " Turn it off before the countdown ends.{% else %}"
+                     f"Set off by {{{{ what }}}} at {{{{ as_local(states['{alarm}'].last_changed).strftime('%H:%M') }}}}."
+                     " Enter your PIN to turn it off.{% endif %}",
+        "icon": f"{{{{ 'mdi:shield-alert' if is_state('{alarm}', 'pending') else 'mdi:alarm-light' }}}}",
+        "icon_color": "red",
+        "layout": "vertical",
+        "multiline_secondary": True,
+        "tap_action": {"action": "none"},
+        "hold_action": {"action": "none"},
+        "card_mod": {"style": FLAT + """
+ha-card { --card-primary-font-size: 26px; --card-secondary-font-size: 15px;
+  --ha-tile-info-primary-font-size: 26px; --ha-tile-info-secondary-font-size: 15px; }
+ha-tile-icon, mushroom-shape-icon { --tile-icon-size: 64px; --icon-size: 64px; --mdc-icon-size: 38px;
+  animation: wp-alarm-icon 1s ease-in-out infinite; }
+@keyframes wp-alarm-icon { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }"""},
+    }
+    countdown: dict = {"type": "markdown", "content": " ", "card_mod": {"style": FLAT}}
+    if cfg.get("countdown"):
+        countdown = {
+            "type": "conditional",
+            "conditions": [{"condition": "state", "entity": cfg["countdown"], "state": "active"}],
+            "card": {"type": "tile", "entity": cfg["countdown"], "name": "The alarm goes off in", "vertical": True,
+                     "tap_action": {"action": "none"}, "icon_tap_action": {"action": "none"},
+                     "card_mod": {"style": """ha-card { background: rgba(255, 59, 48, 0.12) !important;
+  border: 1px solid rgba(255, 59, 48, 0.45) !important; --ha-tile-info-primary-font-size: 15px;
+  --ha-tile-info-secondary-font-size: 56px; --ha-tile-info-secondary-font-weight: 700;
+  --ha-tile-info-secondary-line-height: 62px; --ha-tile-info-secondary-color: #ff453a; }
+ha-tile-icon { display: none !important; }"""}},
+        }
+    pad = {
+        "type": "alarm-panel", "entity": alarm, "name": cfg.get("name", "Alarm"), "states": [],
+        "card_mod": {"style": FLAT + """
+.card-header { display: none; }
+#armActions ha-button::part(base) { height: 64px; font-size: 1.4em; font-weight: 700; border-radius: 32px; background: #ff3b30; color: #fff; }"""},
+    }
+    return [{
+        "type": "custom:mod-card",
+        "visibility": [{"condition": "state", "entity": alarm, "state": ["pending", "triggered"]}],
+        "grid_options": {"columns": 12},
+        "card_mod": {"style": {"hui-vertical-stack-card$": ALARM_LANDSCAPE, ".": OVERLAY_STYLE}},
+        "card": {"type": "vertical-stack", "cards": [header, countdown, pad]},
+    }]
+
+
 def with_overlay(home: dict, sections: list[dict]) -> list[dict]:
-    """Put the entry pop-up in the first section of a page, so it shows on every page."""
-    overlay = entry_overlay(home)
+    """Put the pop-ups (alarm takeover, entry) in the first section of a page, so they show on every page."""
+    overlay = alarm_overlay(home) + entry_overlay(home)
     if not overlay or not sections:
         return sections
     return [{**sections[0], "cards": overlay + sections[0]["cards"]}] + sections[1:]
@@ -797,6 +865,14 @@ def check(home) -> list[str]:
                     if isinstance(door["open"], str) and door["open"].split(".")[0] not in OPENERS:
                         errors.append(f"entry doors[{j}] ({door['name']}): 'open' must be a script, lock, button or cover "
                                       "(for a relay switch, use the entry_open script blueprint)")
+    take = home.get("alarm_takeover")
+    if take:
+        if not home.get("alarm"):
+            errors.append("alarm_takeover: also set 'alarm' (your alarm panel entity)")
+        if isinstance(take, dict) and take.get("countdown"):
+            entity("alarm_takeover countdown", take["countdown"])
+            if not str(take["countdown"]).startswith("timer."):
+                errors.append(f"alarm_takeover countdown: {take['countdown']!r} must be a timer (timer.…)")
     extra = home.get("extra_alerts")
     if extra is not None:
         if not isinstance(extra, list):

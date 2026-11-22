@@ -1,0 +1,64 @@
+blueprint:
+  name: Alarm takeover — count down the entry delay
+  description: >-
+    For the Wall Panel Kit's **alarm takeover** (`alarm_takeover:` in
+    `my_home.yaml`). When a door opens while the alarm is on, the alarm waits
+    a few seconds before going off (its *pending* state). This runs a timer for
+    exactly that time, so the takeover can show **"The alarm goes off in 0:27"**
+    above the PIN pad. The timer stops as soon as the alarm is turned off or
+    goes off.
+
+
+    The delay comes from the alarm itself when it reports one (Alarmo's
+    `delay` attribute); otherwise the default below is used. Set it to your
+    alarm's entry delay.
+
+
+    **Create first:** a **Timer helper**, e.g. "Alarm countdown", and put it
+    under `alarm_takeover: countdown:` in `my_home.yaml`.
+
+
+    Nothing here arms, disarms or triggers the alarm.
+  domain: automation
+  source_url: https://github.com/davidteles/ha-wall-panel-kit/blob/main/blueprints/automation/alarm_countdown.yaml
+  input:
+    alarm:
+      name: Alarm panel
+      selector: { entity: { domain: alarm_control_panel } }
+    countdown:
+      name: Countdown timer
+      selector: { entity: { domain: timer } }
+    default_delay:
+      name: Entry delay, if the alarm doesn't say
+      default: 30
+      selector: { number: { min: 5, max: 300, unit_of_measurement: s } }
+
+mode: queued
+max: 5
+
+variables:
+  alarm: !input alarm
+  default_delay: !input default_delay
+
+triggers:
+  - trigger: state
+    entity_id: !input alarm
+    to: pending
+    id: pending
+  - trigger: state
+    entity_id: !input alarm
+    from: pending
+    id: ended
+
+actions:
+  - choose:
+      - conditions: [{ condition: trigger, id: pending }]
+        sequence:
+          - action: timer.start
+            target: { entity_id: !input countdown }
+            data:
+              duration: "{{ (state_attr(alarm, 'delay') or default_delay) | int }}"
+      - conditions: [{ condition: trigger, id: ended }]
+        sequence:
+          - action: timer.cancel
+            target: { entity_id: !input countdown }

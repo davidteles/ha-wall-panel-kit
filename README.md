@@ -96,6 +96,28 @@ Small automations that make a wall panel feel alive. Import them, create the hel
 
 On Home, the Leaving button turns into a live countdown with **I'm staying** and **Arm now** while it runs.
 
+### Alarm takeover
+
+When a door opens while the alarm is on, every page of the tablet and the phone is covered by a red pop-up: what was opened, **"The alarm goes off in 0:27"**, and the PIN pad. If nobody enters the PIN in time it says the alarm is going off; once the PIN is entered, the page is back to normal.
+
+![Four tablet screenshots from the sample home: 1, a room page with the alarm on; 2, a door opened, so a red pop-up covers the page with "Enter your PIN", a countdown at 17 seconds and a PIN pad; 3, "The alarm is going off" with the PIN pad; 4, the same room page again after the PIN was entered.](docs/images/alarm-takeover-sequence.png)
+
+<img src="docs/images/alarm-takeover-phone.png" width="260" alt="The same pop-up on a phone: Enter your PIN, the countdown at 9 seconds, then the PIN pad below.">
+
+*Sample home, kit v1.9.0, Home Assistant 2026.2.3 with a manual alarm (30 s entry delay); real screenshots of the generated dashboards, not mock-ups. The "what was opened" line names the sensor with Alarmo; other alarms say "a door or sensor".*
+
+**Set it up**
+
+1. `alarm:` must be your alarm panel. Any alarm with an entry delay (its *pending* state) works: Alarmo, the manual alarm, most alarm integrations.
+2. For the countdown, create a **Timer helper** ("Alarm countdown") and import the **Alarm countdown** blueprint below. Without it, the pop-up still shows, without the number.
+3. Add `alarm_takeover:` to `my_home.yaml` and run the script again.
+
+Needs Mushroom and card-mod (both already in the list above). It only shows the panel's own PIN pad: nothing arms, disarms or triggers anything by itself, and the PIN is checked by your alarm, not the dashboard.
+
+| Blueprint | What it does | Helpers | Import |
+|---|---|---|---|
+| **Alarm countdown** | Runs the timer for the alarm's entry delay (Alarmo reports it; otherwise the default you set) and stops it as soon as the alarm is turned off or goes off | Timer "Alarm countdown" | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Falarm_countdown.yaml) |
+
 ### Entry (doorbell / intercom)
 
 | Blueprint | What it does | Helpers | Import |
@@ -112,6 +134,8 @@ title: Home
 weather: weather.home
 calendar: calendar.family            # optional
 alarm: alarm_control_panel.home      # optional → adds Security
+alarm_takeover:                      # optional → red PIN pop-up on every page (see Alarm takeover)
+  countdown: timer.alarm_countdown   # optional → "The alarm goes off in 0:27"
 people: [person.alex, person.sam]    # optional
 
 tablet:
