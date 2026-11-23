@@ -155,24 +155,65 @@ async def test_lock_with_open_support_uses_open(hass, blueprints):
     assert len(opened) == 1 and len(unlocked) == 1
 
 
-@pytest.mark.parametrize("door_state,title", [("on", "✅ Front door opened"),
-                                              ("off", "⚠️ Front door: open was sent, but it didn't confirm")])
-async def test_confirmation_sensor_decides_opened_or_not(hass, blueprints, later, door_state, title):
+@pytest.mark.parametrize("confirm,before,after,title", [
+    ("binary_sensor.front_contact", "off", "on", "✅ Front door opened"),
+    ("binary_sensor.front_contact", "off", "off", "⚠️ Front door: open was sent, but it didn't confirm"),
+    # Already open before the tap: nothing can be confirmed (review P1: a level check said "opened" at once).
+    ("binary_sensor.front_contact", "on", "on", "➡️ Open sent to Front door (it already showed open)"),
+    # A lock only proves the latch is free, not that the door opened.
+    ("lock.front", "locked", "unlocked", "🔓 Front door unlocked"),
+    ("cover.gate", "closed", "opening", "↗️ Front door opening"),
+])
+async def test_confirmation_sensor_decides_what_the_phones_say(hass, blueprints, later, confirm, before, after, title):
     assert await async_setup_component(hass, "input_boolean", {"input_boolean": {"entry_ringing": {}}})
     phone = async_mock_service(hass, "notify", "phone")
     async_mock_service(hass, "lock", "unlock")
     hass.states.async_set("lock.front", "locked", {"supported_features": 0})
-    hass.states.async_set("binary_sensor.front_contact", "off", {"device_class": "door"})
+    hass.states.async_set(confirm, before)
     hass.states.async_set(BELL, "unknown", {"event_types": ["ring"], "device_class": "doorbell"})
     await blueprints(
         scripts={"open_front": {"use_blueprint": {"path": "entry/entry_open.yaml", "input": {
-            "door_name": "Front door", "opener": "lock.front", "confirm": "binary_sensor.front_contact", "confirm_seconds": 5}}}},
+            "door_name": "Front door", "opener": "lock.front", "confirm": confirm, "confirm_seconds": 5}}}},
         automations=[{"alias": "entry ring", "use_blueprint": {"path": "entry/entry_ring.yaml", "input": {
             "name": "Front door", "ring": [BELL], "ringing": RINGING, "doors": ["script.open_front"],
             "notify_action": "notify.phone"}}}])
     await hass.services.async_call("script", "turn_on", {"entity_id": "script.open_front"}, blocking=True)
     await settle(hass)
-    hass.states.async_set("binary_sensor.front_contact", door_state, {"device_class": "door"})
+    hass.states.async_set(confirm, after)
     await later(seconds=6)
     await settle(hass)
     assert phone and phone[-1].data["title"] == title
+
+
+@pytest.mark.parametrize("confirm,before,after,expected", [
+    (None, None, None, "Open sent to Front door"),
+    ("binary_sensor.front_contact", "off", "on", "✓ Front door opened"),
+    ("binary_sensor.front_contact", "on", "on", "Open sent to Front door"),   # already open before the tap
+    ("lock.front", "locked", "unlocked", "🔓 Front door unlocked"),
+])
+async def test_tablet_header_says_only_what_is_confirmed(hass, freezer, confirm, before, after, expected):
+    """The built-in pop-up's header (render.py) follows the same rule as the phones."""
+    import importlib.util
+    from datetime import timedelta
+    from pathlib import Path
+
+    from homeassistant.helpers.template import Template
+    from homeassistant.util import dt as dt_util
+
+    spec = importlib.util.spec_from_file_location("render", Path(__file__).resolve().parents[2] / "tools" / "render.py")
+    render = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(render)
+    door = {"name": "Front door", "open": "script.open_front"}
+    if confirm:
+        door["confirm"] = confirm
+        hass.states.async_set(confirm, before)
+    e = {"ringing": RINGING, "doors": [door]}
+    header = render.entry_overlay({"entry": e})[0]["card"]["cards"][0]
+    freezer.tick(5)
+    hass.states.async_set("script.open_front", "off", {"last_triggered": dt_util.utcnow()})
+    freezer.tick(2)
+    if confirm and after != before:
+        hass.states.async_set(confirm, after)
+    assert Template(header["primary"], hass).async_render() == expected
+    freezer.tick(timedelta(seconds=40))
+    assert Template(header["primary"], hass).async_render() == "Someone's at the door"

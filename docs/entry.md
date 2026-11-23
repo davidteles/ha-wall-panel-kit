@@ -13,7 +13,7 @@ When someone rings, every screen running the kit's dashboards shows who is there
 | When | What you see |
 |---|---|
 | **Someone rings** | A pop-up covers whatever page is open on the tablet and the phone dashboard: live camera, *Building door* / *Gate* buttons, *Dismiss*. The attention strip says 🔔 *Someone at the building door*. The phones get a time-sensitive notification with a snapshot. |
-| **You tap a door** | It asks "Open the building door?" first. Then the door opens, the pop-up shows **✓ Building door opened** for a few seconds (so you can watch them come in) and closes by itself. The phones' notification turns into a quiet "✅ Building door opened at 00:51". |
+| **You tap a door** | It asks "Open the building door?" first. Then the command goes out and the pop-up says what is actually known, for a few seconds (so you can watch them come in), then closes by itself: **✓ Building door opened** only when the door's `confirm` sensor changed to open after the tap, **🔓 unlocked** when only a lock confirms, **opening…** for a gate still moving, and **Open sent to Building door** when nothing confirms it (no sensor, or it already showed open). The phones' notification turns into the same quiet line, e.g. "✅ Building door opened at 00:51". |
 | **You press Open on the phone** | iPhone asks for Face ID or the passcode, then the same as above. |
 | **Nobody answers** | After the ring time (90 s by default) the pop-up closes. The phone notification stays, so you can see you missed someone. |
 | **Quick replies** (optional) | "I'm coming!", "Leave it at the door"… spoken through the doorbell's speaker. |
@@ -65,6 +65,7 @@ entry:
   doors:
     - name: Building door
       open: script.open_building_door
+      confirm: binary_sensor.building_door      # optional: a contact, lock or cover that proves it opened (use the same one as in the door script)
     - name: Gate
       icon: mdi:gate
       open: script.open_gate

@@ -253,15 +253,24 @@ FLAT = """ha-card { background: transparent !important; border: none !important;
 
 
 def opened_template(e: dict) -> str:
-    """Sets `opened` to the name of a door whose script ran in the last 30 s ('' otherwise)."""
-    pairs = [(d["name"], d["open"]) for d in e.get("doors") or [] if str(d.get("open", "")).startswith("script.")]
-    if not pairs:
-        return "{% set opened = '' %}"
-    items = ", ".join(f"('{n}', '{x}')" for n, x in pairs)
-    return ("{% set ns = namespace(o='') %}"
-            f"{{% for n, x in [{items}] %}}{{% set t = state_attr(x, 'last_triggered') %}}"
-            "{% if t and (now() - t).total_seconds() < 30 %}{% set ns.o = n %}{% endif %}{% endfor %}"
-            "{% set opened = ns.o %}")
+    """Sets `opened` to the name of a door whose script ran in the last 30 s ('' otherwise) and `verb` to
+    what is known about it: 'opened' / 'unlocked' / 'opening' only when that door's optional `confirm`
+    sensor CHANGED to that after the tap, otherwise 'sent' (the command went out, nothing confirms it)."""
+    rows = [(d["name"], d["open"], d.get("confirm") or "") for d in e.get("doors") or []
+            if str(d.get("open", "")).startswith("script.")]
+    if not rows:
+        return "{% set opened = '' %}{% set verb = '' %}"
+    items = ", ".join(f"('{n}', '{x}', '{c}')" for n, x, c in rows)
+    return ("{% set ns = namespace(o='', v='') %}"
+            f"{{% for n, x, c in [{items}] %}}{{% set t = state_attr(x, 'last_triggered') %}}"
+            "{% if t and (now() - t).total_seconds() < 30 %}{% set ns.o = n %}{% set ns.v = 'sent' %}"
+            "{% set s = states[c] if c else none %}"
+            "{% if s is not none and s.last_changed >= t %}"
+            "{% if s.state in ['on', 'open'] %}{% set ns.v = 'opened' %}"
+            "{% elif s.state == 'unlocked' %}{% set ns.v = 'unlocked' %}"
+            "{% elif s.state == 'opening' %}{% set ns.v = 'opening' %}{% endif %}"
+            "{% endif %}{% endif %}{% endfor %}"
+            "{% set opened = ns.o %}{% set verb = ns.v %}")
 
 
 def entry_overlay(home: dict) -> list[dict]:
@@ -277,12 +286,16 @@ def entry_overlay(home: dict) -> list[dict]:
     last = e.get("last_ring")
     header = {
         "type": "custom:mushroom-template-card",
-        # Right after a door script runs, the header says so (the pop-up stays a few seconds, then closes).
-        "primary": (opened_template(e) + "{{ ('✓ ' ~ opened ~ ' opened') if opened else \"Someone's at the door\" }}"),
+        # Right after a door script runs, the header says what is known: opened / unlocked / opening only
+        # when the door's `confirm` sensor changed after the tap, otherwise just "Open sent".
+        "primary": (opened_template(e) + "{% if not opened %}Someone's at the door"
+                    "{% elif verb == 'opened' %}✓ {{ opened }} opened{% elif verb == 'unlocked' %}🔓 {{ opened }} unlocked"
+                    "{% elif verb == 'opening' %}{{ opened }} opening…{% else %}Open sent to {{ opened }}{% endif %}"),
         "secondary": (f"{{% set ts = state_attr('{last}', 'timestamp') %}}{e.get('name', 'Door')}{{{{ (' · rang at ' ~ ts | timestamp_custom('%H:%M')) if ts else '' }}}}"
                       if last else e.get("name", "Door")),
-        "icon": opened_template(e) + "{{ 'mdi:door-open' if opened else 'mdi:bell-ring' }}",
-        "icon_color": opened_template(e) + "{{ 'green' if opened else 'red' }}",
+        "icon": opened_template(e) + "{{ {'opened': 'mdi:door-open', 'opening': 'mdi:door-open', 'unlocked': 'mdi:lock-open-variant',"
+                                     " 'sent': 'mdi:send'}.get(verb, 'mdi:bell-ring') }}",
+        "icon_color": opened_template(e) + "{{ {'opened': 'green', 'opening': 'green', 'unlocked': 'green', 'sent': 'amber'}.get(verb, 'red') }}",
         "layout": "vertical",
         "tap_action": {"action": "none"},
         "hold_action": {"action": "none"},
@@ -863,6 +876,10 @@ def check(home) -> list[str]:
                         errors.append(f"entry doors[{j}]: needs a 'name' and an 'open' entity")
                         continue
                     entity(f"entry doors[{j}] ({door['name']}) open", door["open"])
+                    if door.get("confirm"):
+                        entity(f"entry doors[{j}] ({door['name']}) confirm", door["confirm"])
+                        if str(door["confirm"]).split(".")[0] not in ("binary_sensor", "lock", "cover"):
+                            errors.append(f"entry doors[{j}] ({door['name']}): 'confirm' must be a binary_sensor, lock or cover")
                     if isinstance(door["open"], str) and door["open"].split(".")[0] not in OPENERS:
                         errors.append(f"entry doors[{j}] ({door['name']}): 'open' must be a script, lock, button or cover "
                                       "(for a relay switch, use the entry_open script blueprint)")
