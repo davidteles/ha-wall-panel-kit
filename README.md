@@ -11,6 +11,39 @@ my_home.yaml  ──►  python tools/render.py  ──►  out/tablet.yaml   (w
 
 <sub>Screenshots from a sample home (Home Assistant's demo devices, made-up people), not a real house.</sub>
 
+## Start here: choose your setup
+
+Start small and add one feature at a time. Pick the row that matches what you want today:
+
+| If you want… | Start with… | Leave off for now |
+|---|---|---|
+| **A first dashboard, or a phone only** | [`examples/one_room.yaml`](examples/one_room.yaml): a title, your weather and one room with one light. The script always writes both dashboards; import only `out/phone.yaml` if a phone is all you want. | Kiosk, screensaver, Alarm, Entry, Leaving, Laundry |
+| **A wall tablet, or tablet + phone** | The same example. Import `out/tablet.yaml`, or both outputs, built from the same file. | Kiosk mode. Check the tablet dashboard in a normal browser first; then add `tablet:` → `kiosk: true` (the tablet only — phones never get kiosk) |
+| **A Kiosk Satellite tablet** | Get the plain tablet dashboard working first. Then point Kiosk Satellite at it and add only the extras you want from [docs/kiosk-satellite.md](docs/kiosk-satellite.md). | Camera and motion wake: the dashboard doesn't need them |
+| **More features** | Add Alarm, Leaving, Laundry or Entry **one at a time**: copy its block from [`my_home.example.yaml`](my_home.example.yaml) and follow its section below ([Panel features](#panel-features-blueprints), [Alarm takeover](#alarm-takeover), [Entry](docs/entry.md), [Laundry](docs/laundry.md)). | Blueprints and helpers for features you haven't turned on |
+
+**The first run**, from the kit's folder, after installing the Python dependencies ([Quick start](#quick-start), step 3):
+
+```bash
+cp examples/one_room.yaml my_home.yaml
+```
+
+Open `my_home.yaml` and change its three inputs to yours: `title`, `weather` and the room (its name and light). Then:
+
+```bash
+python tools/render.py --needs
+```
+
+```bash
+python tools/render.py
+```
+
+- **`--needs` only reads your file.** It lists the HACS cards for the features you turned on, and gives a template to paste in *Developer tools → Template* that names any entity id your Home Assistant doesn't have. It doesn't install the cards, and it can't tell whether they are installed. It always lists navbar-card, because the phone dashboard is always written: skip it if you only import the tablet one.
+- **Then import** the output you chose ([Quick start](#quick-start), steps 4–6).
+- **To undo:** each run keeps the previous output in `out/previous/` ([Changing it later, and undoing a change](#changing-it-later-and-undoing-a-change)), and [Remove it](#remove-it) takes the dashboards away again.
+
+`--needs` and the one-room example need kit **v1.9.0 or newer** (or a checkout of `main`).
+
 ## What you get
 
 | Page | Tablet | Phone |
