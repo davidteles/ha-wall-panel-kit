@@ -42,9 +42,13 @@ blueprint:
     confirm:
       name: Confirms it opened (optional)
       description: >-
-        A door contact (on = open), or the lock / cover itself (unlocked, open or
-        opening). Without it, the phones are told the command was sent, not that
-        the door opened.
+        A door contact (on = open), or the lock / cover itself. Only a CHANGE
+        after the tap counts: a contact turning on or a cover reaching open says
+        "opened"; a lock turning unlocked says "unlocked" (the latch is free, the
+        door may still be shut); a cover still moving says "opening". If it
+        already showed open or unlocked before the tap, nothing can be confirmed
+        and the phones are told the command was sent. Without a sensor, the
+        phones are told the command was sent.
       default: []
       selector: { entity: { domain: [binary_sensor, lock, cover] } }
     confirm_seconds:
@@ -64,6 +68,9 @@ variables:
   has_confirm: "{{ confirm_entity not in ['', none, []] }}"
 
 sequence:
+  - variables:
+      before: "{{ states(confirm_entity) if has_confirm else '' }}"
+      already: "{{ has_confirm and before in ['on', 'open', 'opening', 'unlocked', 'unlocking'] }}"
   - choose:
       - conditions: "{{ domain == 'lock' and (state_attr(opener, 'supported_features') | int(0)) | bitwise_and(1) > 0 }}"
         sequence:
@@ -89,20 +96,29 @@ sequence:
           - action: cover.open_cover
             target: { entity_id: "{{ opener }}" }
   - if:
-      - condition: template
-        value_template: "{{ has_confirm }}"
+      - alias: A sensor that did not already show open before the tap
+        condition: template
+        value_template: "{{ has_confirm and not already }}"
     then:
-      - wait_template: >-
-          {{ is_state(confirm_entity, 'on') or states(confirm_entity) in ['unlocked', 'open', 'opening'] }}
+      # It wasn't open/unlocked before, so reaching one of these is a change caused after the tap.
+      - wait_template: "{{ states(confirm_entity) in ['on', 'open', 'opening', 'unlocked'] }}"
         timeout: { seconds: "{{ confirm_seconds | int(10) }}" }
+      - variables:
+          got: "{{ states(confirm_entity) }}"
+          result: >-
+            {%- if not wait.completed -%}no
+            {%- elif got in ['on', 'open'] -%}yes
+            {%- elif got == 'unlocked' -%}unlocked
+            {%- elif got == 'opening' -%}opening
+            {%- else -%}no{%- endif -%}
       - event: wall_panel_entry_opened
         event_data:
           door: "{{ door_name }}"
           entity_id: "{{ opener }}"
-          confirmed: "{{ 'yes' if wait.completed else 'no' }}"
+          confirmed: "{{ result }}"
     else:
       - event: wall_panel_entry_opened
         event_data:
           door: "{{ door_name }}"
           entity_id: "{{ opener }}"
-          confirmed: unknown
+          confirmed: "{{ 'already' if already else 'unknown' }}"

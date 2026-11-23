@@ -32,7 +32,7 @@ With the Leaving feature, one tap turns the house off and starts a countdown. **
 
 <sub>Before → Leaving (only the way-out light stays on, music paused) → I'm staying (all five lights and both speakers back as they were). Taken with the kit's own Leaving blueprints.</sub>
 
-**Entry — doorbell, intercom, door and gate.** When someone rings, a pop-up covers whatever page is open: the live camera, quick replies and one button per door. Opening shows "✓ opened" for a few seconds, then closes it. Phones get a snapshot, with Face ID before anything opens. It works with any doorbell or intercom Home Assistant can see. See [docs/entry.md](docs/entry.md).
+**Entry — doorbell, intercom, door and gate.** When someone rings, a pop-up covers whatever page is open: the live camera, quick replies and one button per door. After you tap Open it says what is really known for a few seconds ("✓ opened" only when a door sensor confirms it, otherwise "Open sent"), then closes it. Phones get a snapshot, with Face ID before anything opens. It works with any doorbell or intercom Home Assistant can see. See [docs/entry.md](docs/entry.md).
 
 ![Tablet and phone while someone is ringing](docs/images/entry-popup.png)
 
@@ -123,7 +123,7 @@ Needs Mushroom and card-mod (both already in the list above). It only shows the 
 
 | Blueprint | What it does | Helpers | Import |
 |---|---|---|---|
-| **Entry — someone rang** | Ring → pop-up on every page, attention strip, phones with snapshot and Face-ID **Open** buttons; opened → "✓ opened" for a few seconds, then closes; no answer → closes after the ring time. Event, binary-sensor or button doorbells | Toggle "Entry ringing", Date and time "Entry last ring" | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fentry%2Fentry_ring.yaml) |
+| **Entry — someone rang** | Ring → pop-up on every page, attention strip, phones with snapshot and Face-ID **Open** buttons; after Open → "✓ opened" (sensor confirmed) or "Open sent" for a few seconds, then closes; no answer → closes after the ring time. Event, binary-sensor or button doorbells | Toggle "Entry ringing", Date and time "Entry last ring" | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fentry%2Fentry_ring.yaml) |
 | **Entry — open a door** *(script)* | One per door or gate: opens a lock (strike), presses a button, pulses a relay or opens a cover, then tells the ring automation | — | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fdavidteles%2Fha-wall-panel-kit%2Fblob%2Fmain%2Fblueprints%2Fscript%2Fentry%2Fentry_open.yaml) |
 
 Hardware, setup, talking back, security and troubleshooting: [docs/entry.md](docs/entry.md).
