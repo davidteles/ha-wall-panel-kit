@@ -20,7 +20,7 @@ Start small and add one feature at a time. Pick the row that matches what you wa
 | **A first dashboard, or a phone only** | [`examples/one_room.yaml`](examples/one_room.yaml): a title, your weather and one room with one light. The script always writes both dashboards; import only `out/phone.yaml` if a phone is all you want. | Kiosk, screensaver, Alarm, Entry, Leaving, Laundry |
 | **A wall tablet, or tablet + phone** | The same example. Import `out/tablet.yaml`, or both outputs, built from the same file. | Kiosk mode. Check the tablet dashboard in a normal browser first; then add `tablet:` → `kiosk: true` (the tablet only — phones never get kiosk) |
 | **A Kiosk Satellite tablet** | Get the plain tablet dashboard working first. Then point Kiosk Satellite at it and add only the extras you want from [docs/kiosk-satellite.md](docs/kiosk-satellite.md). | Camera and motion wake: the dashboard doesn't need them |
-| **More features** | Add Alarm, Leaving, Laundry or Entry **one at a time**: copy its block from [`my_home.example.yaml`](my_home.example.yaml) and follow its section below ([Panel features](#panel-features-blueprints), [Alarm takeover](#alarm-takeover), [Entry](docs/entry.md), [Laundry](docs/laundry.md)). | Blueprints and helpers for features you haven't turned on |
+| **More features** | Add Alarm, Leaving, Laundry or Entry **one at a time**: copy its block from [`my_home.example.yaml`](my_home.example.yaml) and follow its section below ([Panel features](#panel-features-blueprints), [Alarm takeover](#alarm-takeover), [Entry](docs/entry.md), [Laundry](docs/laundry.md), [Match](docs/match.md)). | Blueprints and helpers for features you haven't turned on |
 
 > **Optional preview, lights only:** [Wall Panel Kit dashboard](https://github.com/davidteles/ha-wall-panel-dashboard) (v0.1.0, Home Assistant 2026.11+) installs from the Marketplace with *Add from link* and shows one area's lights as built-in tiles, with no Python and no YAML to paste. It has none of this kit's features, automations, blueprints or theme, and it doesn't replace or convert a dashboard made here. For anything beyond one area's lights, use the generator below.
 
@@ -72,6 +72,8 @@ With the Leaving feature, one tap turns the house off and starts a countdown. **
 ![Tablet and phone while someone is ringing](docs/images/entry-popup.png)
 
 **Laundry.** When the wash is done, Home shows "ready to hang · outside recommended" with **Hung indoors / Hung outside / Nothing to hang**. Then it shows where the laundry is drying, and turns red if rain is coming while it's outside. See [docs/laundry.md](docs/laundry.md).
+
+**Your team's match.** From 30 minutes before kick-off until an hour after the final whistle, a slim strip under the clock shows both crests, the kick-off time or the score with the minute under it, and Live / Half time / Full time. For five minutes after a goal, "⚽ GOAL" is the first line of the attention strip. It reads the [Team Tracker](https://github.com/vasqued2/ha-teamtracker) integration and takes no room outside the match. See [docs/match.md](docs/match.md).
 
 Every room gets its own page, on the tablet and on the phone:
 

@@ -373,3 +373,62 @@ def test_alarm_takeover_needs_an_alarm_and_a_timer():
     home["alarm_takeover"] = {"countdown": "input_number.x"}
     errors = render.check(home)
     assert any("also set 'alarm'" in e for e in errors) and any("must be a timer" in e for e in errors)
+
+
+# ---------------------------------------------------------------- match (Team Tracker)
+
+MATCH = FULL["match"]
+
+
+def match_cards_of(dash):
+    home = next(v for v in dash["views"] if v["path"] == "home")
+    return [c for c in all_cards({"views": [home]}) if c.get("type") == "markdown" and c.get("entity_id") == [MATCH["sensor"]]]
+
+
+@pytest.mark.parametrize("build", [render.tablet, render.phone])
+def test_match_strip_on_home_only_in_the_window(build):
+    [card] = match_cards_of(build(FULL))
+    assert card["visibility"] == [{"condition": "state", "entity": MATCH["window"], "state": "on"}]
+    assert card["grid_options"] == {"columns": 12}
+    for word in ("_logo", "team_homeaway", "Kick-off", "Half time", "Full time", "league_name"):
+        assert word in card["content"]
+
+
+def test_match_strip_sits_under_the_weather():
+    home = next(v for v in render.tablet(FULL)["views"] if v["path"] == "home")
+    first = home["sections"][0]["cards"]
+    i = next(i for i, c in enumerate(first) if c.get("type") == "custom:clock-weather-card")
+    assert first[i + 1].get("entity_id") == [MATCH["sensor"]]
+
+
+def test_no_match_block_no_strip_and_no_goal_line():
+    dash = render.tablet(ONE_ROOM)
+    assert "team_homeaway" not in str(dash) and "GOAL" not in str(dash)
+
+
+def test_goal_line_is_first_in_the_attention_strip():
+    strip = render.alert_strip(FULL)["content"]
+    assert f"is_state('{MATCH['goal_alert']}', 'on')" in strip
+    assert "+ ns.items" in strip, "the goal goes before every other line"
+
+
+def test_goal_alert_is_optional():
+    home = copy.deepcopy(FULL)
+    home["match"] = {"sensor": MATCH["sensor"], "window": MATCH["window"]}
+    assert "GOAL" not in render.alert_strip(home)["content"]
+    [card] = match_cards_of(render.tablet(home))
+    assert "set goal = false" in card["content"]
+
+
+@pytest.mark.parametrize("match,expected", [
+    ({"window": "binary_sensor.w"}, "match: 'sensor' is missing"),
+    ({"sensor": "binary_sensor.x", "window": "binary_sensor.w"}, "must be a sensor"),
+    ({"sensor": "sensor.t"}, "match: 'window' is missing"),
+    ({"sensor": "sensor.t", "window": "input_boolean.w"}, "must be a binary_sensor"),
+    ({"sensor": "sensor.t", "window": "binary_sensor.w", "goal_alert": "binary_sensor.g"}, "set 'goal_alert' and 'goal_by' together"),
+    ({"sensor": "sensor.t", "window": "binary_sensor.w", "goal_alert": "binary_sensor.g", "goal_by": "input_datetime.x"}, "goal_by"),
+])
+def test_bad_match_block_names_the_key(match, expected):
+    home = copy.deepcopy(ONE_ROOM)
+    home["match"] = match
+    assert any(expected in e for e in render.check(home)), render.check(home)
