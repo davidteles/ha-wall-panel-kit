@@ -85,6 +85,7 @@ def alert_strip(home: dict) -> dict:
         + entry_line(home)
         + laundry_line(home)
         + extra_lines(home)
+        + match_line(home)
         + "{{ ns.items | join('<br>') }}"
     )
     return {
@@ -430,6 +431,97 @@ def entry_home_card(home: dict) -> list[dict]:
     }]
 
 
+# ---------------------------------------------------------------- match (Team Tracker)
+
+def match(home: dict) -> dict:
+    return home.get("match") or {}
+
+
+# Team Tracker's `clock` is ESPN's short status: "67'", "HT" at half time (still state IN), "FT" after.
+_HT = "['ht', 'halftime', 'half time', 'half-time']"
+
+
+def match_card(home: dict) -> list[dict]:
+    """A slim strip on Home while `match.window` is on: both logos, the kick-off time or the score with the
+    minute under it, and the status (Live / Half time / Full time, or GOAL! for a few minutes) with the competition."""
+    m = match(home)
+    if not m.get("sensor"):
+        return []
+    e = m["sensor"]
+    goal = ""
+    if m.get("goal_alert") and m.get("goal_by"):
+        goal = (f"{{%- set goal = is_state('{m['goal_alert']}', 'on') -%}}"
+                f"{{%- set gby = states('{m['goal_by']}') -%}}\n")
+    else:
+        goal = "{%- set goal = false -%}{%- set gby = '' -%}\n"
+    content = (
+        f"{{%- set e = '{e}' -%}}\n"
+        "{%- set s = states(e) -%}\n"
+        "{%- set home = state_attr(e, 'team_homeaway') != 'away' -%}\n"
+        "{%- set t = 'team' if home else 'opponent' -%}{%- set o = 'opponent' if home else 'team' -%}\n"
+        "{%- set c = state_attr(e, 'clock') | string -%}\n"
+        f"{{%- set ht = s == 'IN' and c | lower in {_HT} -%}}\n"
+        "{%- set k = state_attr(e, 'date') | as_datetime(none) -%}\n"
+        "{%- set g1 = state_attr(e, t ~ '_score') -%}{%- set g2 = state_attr(e, o ~ '_score') -%}\n"
+        + goal +
+        "<table><tr>\n"
+        "<td><img src=\"{{ state_attr(e, t ~ '_logo') }}\"></td>\n"
+        "<td><h2>{% if s == 'PRE' %}{{ (k | as_local).strftime('%H:%M') if k else '–' }}"
+        "{% else %}{{ g1 if g1 is not none else 0 }}<font color=\"#8a8f98\">-</font>{{ g2 if g2 is not none else 0 }}{% endif %}</h2>"
+        "<b><font color=\"#4ade80\">{% if s == 'PRE' %}Kick-off{% elif ht %}HT{% elif s == 'POST' %}FT{% else %}{{ c }}{% endif %}</font></b></td>\n"
+        "<td><img src=\"{{ state_attr(e, o ~ '_logo') }}\"></td>\n"
+        "<td><b>{% if s == 'IN' and goal and gby == state_attr(e, 'team_name') %}<font color=\"#4ade80\">⚽ GOAL!</font>"
+        "{% elif s == 'IN' and goal %}<font color=\"#ff5a5a\">Goal {{ gby }}</font>"
+        "{% elif ht %}<font color=\"#f5b942\">● Half time</font>{% elif s == 'IN' %}<font color=\"#ff5a5a\">● Live</font>"
+        "{% elif s == 'POST' %}Full time{% else %}{{ 'Today' if k and (k | as_local).date() == now().date() else '' }}{% endif %}</b>"
+        "<br>{{ state_attr(e, 'league_name') or '' }}</td>\n"
+        "</tr></table>\n"
+    )
+    inner = (
+        "table, tr, th, td { border: none !important; background: none !important; }\n"
+        "table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0; }\n"
+        "td { vertical-align: middle; text-align: center; padding: 0; }\n"
+        "td:nth-child(1), td:nth-child(3) { width: 40px; }\n"
+        "td:nth-child(2) { width: 74px; }\n"
+        "td:nth-child(2) b { display: block; font-size: 0.72rem; line-height: 1.1; margin-top: 2px; }\n"
+        "td:nth-child(4) { text-align: right; padding-left: 8px; font-size: 0.72rem; line-height: 1.25; opacity: 0.85;"
+        " white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }\n"
+        "td:nth-child(4) b { font-size: 0.92rem; }\n"
+        "img { width: 32px; height: 32px; object-fit: contain; display: block; margin: 0 auto; }\n"
+        "h2 { margin: 0; font-size: 1.35rem; line-height: 1; font-weight: 800; white-space: nowrap; }\n"
+    )
+    return [{
+        "type": "markdown",
+        # entity_id: the template only re-renders when the match sensor changes (it updates every few seconds live).
+        "entity_id": [e],
+        "content": content,
+        "grid_options": {"columns": 12},
+        "visibility": [{"condition": "state", "entity": m["window"], "state": "on"}],
+        "card_mod": {"style": {
+            ".": "ha-card { padding: 0 14px !important; height: 56px; box-sizing: border-box;"
+                 " display: flex; flex-direction: column; justify-content: center; }\n"
+                 "ha-markdown { padding: 0 !important; }\n",
+            "ha-markdown $": inner,
+        }},
+    }]
+
+
+def match_line(home: dict) -> str:
+    """'⚽ GOAL <team>! 2–1' as the first line of the attention strip while `match.goal_alert` is on."""
+    m = match(home)
+    if not (m.get("sensor") and m.get("goal_alert") and m.get("goal_by")):
+        return ""
+    e = m["sensor"]
+    return (
+        f"{{%- if is_state('{m['goal_alert']}', 'on') -%}}"
+        f"{{%- set by = states('{m['goal_by']}') -%}}"
+        f"{{%- set ns.items = ['⚽ <b>GOAL ' ~ by ~ ('!' if by == state_attr('{e}', 'team_name') else '') ~ '</b> '"
+        f" ~ (state_attr('{e}', 'team_score') or 0) ~ '–' ~ (state_attr('{e}', 'opponent_score') or 0)"
+        f" ~ ' ' ~ (state_attr('{e}', 'clock') or '')] + ns.items -%}}"
+        "{%- endif -%}\n"
+    )
+
+
 # ---------------------------------------------------------------- laundry
 
 def laundry(home: dict) -> dict:
@@ -667,7 +759,7 @@ def home_sections(home: dict, phone: bool) -> list[dict]:
                           {"type": "spacer"}, {"type": "weather"}]},
             {"alignment": "center", "segments": [{"type": "icon", "icon": "mdi:calendar"}, {"type": "date"}]},
         ]}
-    first = (entry_home_card(home) + [weather] + inside_range(home) + panel_cards(home) + [alert_strip(home)]
+    first = (entry_home_card(home) + [weather] + match_card(home) + inside_range(home) + panel_cards(home) + [alert_strip(home)]
              + laundry_cards(home) + [lights_summary(home)])
     if home.get("alarm"):
         first.append(tile(home["alarm"], 6, name="Alarm"))
@@ -841,6 +933,24 @@ def check(home) -> list[str]:
             entity(key, home[key])
     for i, person in enumerate(home.get("people") or []):
         entity(f"people[{i}]", person)
+    mt = home.get("match")
+    if mt is not None:
+        if not isinstance(mt, dict):
+            errors.append("match: must be a mapping (sensor:, window:, goal_alert:, goal_by:)")
+        else:
+            if not mt.get("sensor"):
+                errors.append("match: 'sensor' is missing (your Team Tracker sensor, e.g. sensor.my_team)")
+            elif not str(mt["sensor"]).startswith("sensor."):
+                errors.append(f"match sensor: {mt['sensor']!r} must be a sensor (the Team Tracker one)")
+            if not mt.get("window"):
+                errors.append("match: 'window' is missing (the binary_sensor that is on around the match, docs/match.md)")
+            elif not str(mt["window"]).startswith("binary_sensor."):
+                errors.append(f"match window: {mt['window']!r} must be a binary_sensor (docs/match.md)")
+            if bool(mt.get("goal_alert")) != bool(mt.get("goal_by")):
+                errors.append("match: set 'goal_alert' and 'goal_by' together (or neither)")
+            for key, dom in (("goal_alert", "binary_sensor."), ("goal_by", "input_text.")):
+                if mt.get(key) and not str(mt[key]).startswith(dom):
+                    errors.append(f"match {key}: {mt[key]!r} must be {dom}…")
     lau = home.get("laundry")
     if lau is not None:
         if not isinstance(lau, dict):
