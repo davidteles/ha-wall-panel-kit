@@ -22,6 +22,8 @@ Start small and add one feature at a time. Pick the row that matches what you wa
 | **A Kiosk Satellite tablet** | Get the plain tablet dashboard working first. Then point Kiosk Satellite at it and add only the extras you want from [docs/kiosk-satellite.md](docs/kiosk-satellite.md). | Camera and motion wake: the dashboard doesn't need them |
 | **More features** | Add Alarm, Leaving, Laundry or Entry **one at a time**: copy its block from [`my_home.example.yaml`](my_home.example.yaml) and follow its section below ([Panel features](#panel-features-blueprints), [Alarm takeover](#alarm-takeover), [Entry](docs/entry.md), [Laundry](docs/laundry.md)). | Blueprints and helpers for features you haven't turned on |
 
+> **Optional preview, lights only:** [Wall Panel Kit dashboard](https://github.com/davidteles/ha-wall-panel-dashboard) (v0.1.0, Home Assistant 2026.11+) installs from the Marketplace with *Add from link* and shows one area's lights as built-in tiles, with no Python and no YAML to paste. It has none of this kit's features, automations, blueprints or theme, and it doesn't replace or convert a dashboard made here. For anything beyond one area's lights, use the generator below.
+
 **The first run**, from the kit's folder, after installing the Python dependencies ([Quick start](#quick-start), step 3):
 
 ```bash
