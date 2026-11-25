@@ -432,3 +432,21 @@ def test_bad_match_block_names_the_key(match, expected):
     home = copy.deepcopy(ONE_ROOM)
     home["match"] = match
     assert any(expected in e for e in render.check(home)), render.check(home)
+
+
+def test_match_source_reads_the_sensor_it_names():
+    home = copy.deepcopy(FULL)
+    home["match"] = {"source": "sensor.match_source", "window": MATCH["window"],
+                     "goal_alert": MATCH["goal_alert"], "goal_by": MATCH["goal_by"]}
+    assert not render.check(home)
+    home_view = next(v for v in render.tablet(home)["views"] if v["path"] == "home")
+    [card] = [c for c in all_cards({"views": [home_view]}) if c.get("entity_id") == ["sensor.match_source"]]
+    assert card["content"].startswith("{%- set e = states('sensor.match_source') -%}")
+    strip = render.alert_strip(home)["content"]
+    assert "set me = states('sensor.match_source')" in strip and "state_attr(me, 'team_name')" in strip
+
+
+def test_match_source_must_be_a_sensor():
+    home = copy.deepcopy(ONE_ROOM)
+    home["match"] = {"source": "input_text.x", "window": "binary_sensor.w"}
+    assert any("match source" in e for e in render.check(home))

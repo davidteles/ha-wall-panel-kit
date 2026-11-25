@@ -437,6 +437,14 @@ def match(home: dict) -> dict:
     return home.get("match") or {}
 
 
+def match_entity_expr(m: dict) -> str:
+    """Jinja expression for the Team Tracker sensor to show: `match.source` (a template sensor whose state is
+    that sensor's entity id, for several competitions) or the fixed `match.sensor`."""
+    if m.get("source"):
+        return f"states('{m['source']}')"
+    return f"'{m['sensor']}'"
+
+
 # Team Tracker's `clock` is ESPN's short status: "67'", "HT" at half time (still state IN), "FT" after.
 _HT = "['ht', 'halftime', 'half time', 'half-time']"
 
@@ -445,9 +453,9 @@ def match_card(home: dict) -> list[dict]:
     """A slim strip on Home while `match.window` is on: both logos, the kick-off time or the score with the
     minute under it, and the status (Live / Half time / Full time, or GOAL! for a few minutes) with the competition."""
     m = match(home)
-    if not m.get("sensor"):
+    if not (m.get("sensor") or m.get("source")):
         return []
-    e = m["sensor"]
+    watched = m.get("source") or m["sensor"]
     goal = ""
     if m.get("goal_alert") and m.get("goal_by"):
         goal = (f"{{%- set goal = is_state('{m['goal_alert']}', 'on') -%}}"
@@ -455,7 +463,7 @@ def match_card(home: dict) -> list[dict]:
     else:
         goal = "{%- set goal = false -%}{%- set gby = '' -%}\n"
     content = (
-        f"{{%- set e = '{e}' -%}}\n"
+        f"{{%- set e = {match_entity_expr(m)} -%}}\n"
         "{%- set s = states(e) -%}\n"
         "{%- set home = state_attr(e, 'team_homeaway') != 'away' -%}\n"
         "{%- set t = 'team' if home else 'opponent' -%}{%- set o = 'opponent' if home else 'team' -%}\n"
@@ -492,8 +500,8 @@ def match_card(home: dict) -> list[dict]:
     )
     return [{
         "type": "markdown",
-        # entity_id: the template only re-renders when the match sensor changes (it updates every few seconds live).
-        "entity_id": [e],
+        # Home Assistant follows the entities the template reads by itself; entity_id just names the card's subject.
+        "entity_id": [watched],
         "content": content,
         "grid_options": {"columns": 12},
         "visibility": [{"condition": "state", "entity": m["window"], "state": "on"}],
@@ -509,15 +517,15 @@ def match_card(home: dict) -> list[dict]:
 def match_line(home: dict) -> str:
     """'⚽ GOAL <team>! 2–1' as the first line of the attention strip while `match.goal_alert` is on."""
     m = match(home)
-    if not (m.get("sensor") and m.get("goal_alert") and m.get("goal_by")):
+    if not ((m.get("sensor") or m.get("source")) and m.get("goal_alert") and m.get("goal_by")):
         return ""
-    e = m["sensor"]
     return (
         f"{{%- if is_state('{m['goal_alert']}', 'on') -%}}"
+        f"{{%- set me = {match_entity_expr(m)} -%}}"
         f"{{%- set by = states('{m['goal_by']}') -%}}"
-        f"{{%- set ns.items = ['⚽ <b>GOAL ' ~ by ~ ('!' if by == state_attr('{e}', 'team_name') else '') ~ '</b> '"
-        f" ~ (state_attr('{e}', 'team_score') or 0) ~ '–' ~ (state_attr('{e}', 'opponent_score') or 0)"
-        f" ~ ' ' ~ (state_attr('{e}', 'clock') or '')] + ns.items -%}}"
+        "{%- set ns.items = ['⚽ <b>GOAL ' ~ by ~ ('!' if by == state_attr(me, 'team_name') else '') ~ '</b> '"
+        " ~ (state_attr(me, 'team_score') or 0) ~ '–' ~ (state_attr(me, 'opponent_score') or 0)"
+        " ~ ' ' ~ (state_attr(me, 'clock') or '')] + ns.items -%}"
         "{%- endif -%}\n"
     )
 
@@ -938,10 +946,12 @@ def check(home) -> list[str]:
         if not isinstance(mt, dict):
             errors.append("match: must be a mapping (sensor:, window:, goal_alert:, goal_by:)")
         else:
-            if not mt.get("sensor"):
-                errors.append("match: 'sensor' is missing (your Team Tracker sensor, e.g. sensor.my_team)")
-            elif not str(mt["sensor"]).startswith("sensor."):
-                errors.append(f"match sensor: {mt['sensor']!r} must be a sensor (the Team Tracker one)")
+            if not (mt.get("sensor") or mt.get("source")):
+                errors.append("match: 'sensor' is missing (your Team Tracker sensor, e.g. sensor.my_team, "
+                              "or 'source' for several competitions)")
+            for key in ("sensor", "source"):
+                if mt.get(key) and not str(mt[key]).startswith("sensor."):
+                    errors.append(f"match {key}: {mt[key]!r} must be a sensor (docs/match.md)")
             if not mt.get("window"):
                 errors.append("match: 'window' is missing (the binary_sensor that is on around the match, docs/match.md)")
             elif not str(mt["window"]).startswith("binary_sensor."):
