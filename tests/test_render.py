@@ -464,3 +464,20 @@ def test_strip_lists_them_when_skip_climate_devices_is_off():
     strip = render.alert_strip(home)["content"]
     assert "device_entities(dev)" not in strip
     assert "is open'] -%}{%- endif -%}{%- endfor -%}" in strip, "the open-door loop still closes its if"
+
+
+def test_always_list_is_validated():
+    home = copy.deepcopy(ONE_ROOM)
+    home["always_list"] = ["light.kitchen", "not an id", "binary_sensor.hub_window"]
+    errors = render.check(home)
+    assert any("always_list[0]" in e and "binary_sensor" in e for e in errors)
+    assert any("always_list[1]" in e for e in errors)
+    assert not any("always_list[2]" in e for e in errors)
+    home["always_list"] = "binary_sensor.hub_window"
+    assert any("always_list: must be a list" in e for e in render.check(home))
+
+
+def test_always_list_goes_into_the_strip():
+    home = copy.deepcopy(ONE_ROOM)
+    home["always_list"] = ["binary_sensor.hub_window"]
+    assert "s.entity_id in ['binary_sensor.hub_window'] or not (dev" in render.alert_strip(home)["content"]
