@@ -65,11 +65,14 @@ def alert_strip(home: dict) -> dict:
     """One markdown card listing what needs attention; hidden when there is nothing."""
     lights = [l for r in home["rooms"] for l in r.get("lights", [])]
     label = home.get("ignore_label", "")
-    # A thermostat's guessed "open window" (tado, Netatmo valves) and a car's doors
-    # and windows sit on a device that also has a climate entity: not the house.
+    # The exact rule: a door/window sensor is skipped when its device also has a
+    # climate.* entity (a thermostat's guessed "open window", a car with a climate
+    # entity). A car without one is NOT skipped (ignore label), and a real contact on
+    # a device with a thermostat IS: `always_list` brings those back. Ignore still wins.
+    always = jinja_list(home.get("always_list") or [])
     skip_climate = (
         "{%- set dev = device_id(s.entity_id) -%}"
-        "{%- if not (dev and device_entities(dev) | select('match', 'climate\\\\.') | list | count > 0) -%}"
+        f"{{%- if s.entity_id in {always} or not (dev and device_entities(dev) | select('match', 'climate\\\\.') | list | count > 0) -%}}"
         if home.get("skip_climate_devices", True) else "{%- if true -%}"
     )
     template = (
@@ -1019,6 +1022,15 @@ def check(home) -> list[str]:
             entity("alarm_takeover countdown", take["countdown"])
             if not str(take["countdown"]).startswith("timer."):
                 errors.append(f"alarm_takeover countdown: {take['countdown']!r} must be a timer (timer.…)")
+    always = home.get("always_list")
+    if always is not None:
+        if not isinstance(always, list):
+            errors.append("always_list: must be a list of binary_sensor entity ids")
+        else:
+            for k, e in enumerate(always):
+                entity(f"always_list[{k}]", e)
+                if isinstance(e, str) and not e.startswith("binary_sensor."):
+                    errors.append(f"always_list[{k}]: {e!r} must be a binary_sensor (a door or window sensor)")
     extra = home.get("extra_alerts")
     if extra is not None:
         if not isinstance(extra, list):

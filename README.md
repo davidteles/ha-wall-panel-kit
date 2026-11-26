@@ -225,7 +225,7 @@ rooms:
 
 **Ignoring things:** create a label (Settings → Areas, labels & zones → Labels), e.g. *Ignore*, put it on any device or entity the attention strip should never mention — a car's window sensors, a fridge door, a tablet's battery — and set `ignore_label: ignore` (the label's id) in `my_home.yaml`.
 
-**Thermostats and cars:** door and window sensors whose device also has a climate entity are left out of the strip on their own: a thermostat's guessed "open window" (tado, Netatmo valves) and a car's doors and windows. Set `skip_climate_devices: false` to list them.
+**Sensors on climate devices:** with `skip_climate_devices` on (the default), a door or window sensor is left out of the strip when its device also has a `climate.*` entity. That hides a thermostat's guessed "open window" (tado, Netatmo valves) and a car's doors when the car has a climate entity. It does not hide a car without one (give it the ignore label), and it would hide a real contact wired into a thermostat or hub with a climate entity: list those under `always_list:`. The ignore label always wins. Set `skip_climate_devices: false` to list every sensor. The strip counts door, window and garage door sensors; the ha-blueprints leaving check also counts the `opening` class (gates, hatches).
 
 Room names must be unique and can't be *Home*, *Rooms*, *Security*, *Energy* or *Entry*.
 

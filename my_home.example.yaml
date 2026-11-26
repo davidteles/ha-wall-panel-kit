@@ -9,8 +9,9 @@ alarm: alarm_control_panel.home      # optional — adds the Security page
 alarm_takeover:                      # optional — red PIN pop-up on every page while the alarm counts down or goes off
   countdown: timer.alarm_countdown   # optional — "goes off in 0:27" (Alarm countdown blueprint)
 ignore_label: ignore                 # optional — label id of things the attention strip should skip
-skip_climate_devices: true           # optional (default true) — leave out doors/windows of thermostats and cars
                                      # (put it on a device or entity: a car's windows, a fridge door…)
+skip_climate_devices: true           # optional (default true) — skip door/window sensors whose device has a climate.* entity
+always_list: []                      # optional — door/window sensors listed even if the rule above skips them
 extra_alerts:                        # optional — your own lines in the attention strip
   - entity: binary_sensor.dehumidifier_water_tank     # shown while it is "on" (or set state:)
     text: 🪣 Dehumidifier tank full — empty it
