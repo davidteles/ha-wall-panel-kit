@@ -63,11 +63,39 @@ restarts. If Home Assistant was down at the final whistle, it falls back to kick
 Use the same window sensor anywhere else that should follow the match (a screensaver line, a
 second card), so the rule lives in one place.
 
+## Several competitions (don't use the "all" league)
+
+Make one Team Tracker sensor **per competition** your team plays (for example `por.1`,
+`uefa.champions`, `por.taca.portugal`: sport *soccer*, the league as the custom league path). Team
+Tracker's "all" league reads the team's fixture list, not the live scoreboards: it never reports `IN`
+or a score, and at kick-off it jumps to the next fixture, so the strip would vanish when the match
+starts. Keep an "all" sensor only as a fallback for competitions ESPN has no feed for.
+
+Then one template sensor (Helpers → Template → Sensor) picks which one to show: the live match, else
+one that finished in the last 4 hours, else the nearest kick-off. List the competition sensors first:
+
+```jinja
+{%- set ids = ['sensor.my_team_league', 'sensor.my_team_champions', 'sensor.my_team_cup', 'sensor.my_team_all'] -%}
+{%- set ns = namespace(live=none, post=none, post_k=none, pre=none, pre_k=none) -%}
+{%- for e in ids -%}
+{%- set s = states(e) -%}{%- set k = state_attr(e, 'date') | as_datetime(none) -%}
+{%- if s == 'IN' and ns.live is none -%}{%- set ns.live = e -%}
+{%- elif s == 'POST' and k is not none and now() < k + timedelta(hours=4) and (ns.post_k is none or k > ns.post_k) -%}{%- set ns.post = e -%}{%- set ns.post_k = k -%}
+{%- elif s == 'PRE' and k is not none and (ns.pre_k is none or k < ns.pre_k) -%}{%- set ns.pre = e -%}{%- set ns.pre_k = k -%}
+{%- endif -%}
+{%- endfor -%}
+{{ ns.live or ns.post or ns.pre or ids | last }}
+```
+
+Use it everywhere instead of a fixed sensor: in my_home.yaml as `source:` (instead of `sensor:`), and
+in the two template helpers above as `{% set src = states('sensor.my_team_match_source') %}` with
+`states(src)` / `state_attr(src, ...)`. Give the match memory blueprint all the competition sensors.
+
 ## 4. my_home.yaml
 
 ```yaml
 match:
-  sensor: sensor.my_team
+  sensor: sensor.my_team                 # or source: sensor.my_team_match_source (several competitions)
   window: binary_sensor.match_window
   goal_alert: binary_sensor.goal_alert   # optional, with goal_by
   goal_by: input_text.last_goal_by

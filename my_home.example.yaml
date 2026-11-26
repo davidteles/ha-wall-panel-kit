@@ -43,6 +43,7 @@ laundry:                             # optional — laundry cards on Home (see d
 
 match:                               # optional — your team's match on Home (Team Tracker, see docs/match.md)
   sensor: sensor.my_team                    # the Team Tracker sensor
+  # source: sensor.my_team_match_source     # instead of sensor, for several competitions (docs/match.md)
   window: binary_sensor.match_window        # on from 30 min before kick-off until 1 h after the end (docs/match.md)
   goal_alert: binary_sensor.goal_alert      # optional — "⚽ GOAL" first in the attention strip for 5 min
   goal_by: input_text.last_goal_by          # with goal_alert — filled by the Team Tracker match blueprint
