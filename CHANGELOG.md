@@ -2,6 +2,18 @@
 
 All notable changes to this project. Versions follow [semantic versioning](https://semver.org/); each entry links to its full release notes on GitHub, which also say how each change was tested.
 
+## [1.13.0] — 2026-11-26
+
+Attention strip: the climate rule stated exactly, plus `always_list` ([#31](https://github.com/davidteles/ha-wall-panel-kit/pull/31)).
+
+- **README states the exact rule:** a door/window sensor is skipped when its device also has a `climate.*` entity. A car without one is not skipped (use the ignore label), and a real contact on a device with a thermostat is.
+- **New optional `my_home.yaml` key `always_list:`** (binary_sensor ids, checked): sensors listed even if that rule skips them. The ignore label still wins.
+- **Fix:** in `my_home.example.yaml`, `ignore_label` has its second comment line back.
+- The README notes that the strip counts door, window and garage door sensors, while the ha-blueprints leaving check also counts `opening`.
+- Tests: the real generated strip is rendered in a test Home Assistant with the same fixture house as ha-blueprints.
+
+_Upgrading:_ regenerate your dashboards. Nothing changes unless you add `always_list:`.
+
 ## [1.12.0] — 2026-11-26
 
 Attention strip skips thermostats and cars.
@@ -167,6 +179,7 @@ Wall-tablet and phone dashboards from one file.
 - **Panel blueprints:** Leaving button + countdown ("I'm staying" puts every light and speaker back), note by voice, rain soon, welcome home, admin mode that switches itself off.
 - **Theme:** Wall Panel (frosted glass, dark).
 
+[1.13.0]: https://github.com/davidteles/ha-wall-panel-kit/releases/tag/v1.13.0
 [1.12.0]: https://github.com/davidteles/ha-wall-panel-kit/releases/tag/v1.12.0
 [1.11.0]: https://github.com/davidteles/ha-wall-panel-kit/releases/tag/v1.11.0
 [1.10.0]: https://github.com/davidteles/ha-wall-panel-kit/releases/tag/v1.10.0
