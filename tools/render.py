@@ -65,6 +65,13 @@ def alert_strip(home: dict) -> dict:
     """One markdown card listing what needs attention; hidden when there is nothing."""
     lights = [l for r in home["rooms"] for l in r.get("lights", [])]
     label = home.get("ignore_label", "")
+    # A thermostat's guessed "open window" (tado, Netatmo valves) and a car's doors
+    # and windows sit on a device that also has a climate entity: not the house.
+    skip_climate = (
+        "{%- set dev = device_id(s.entity_id) -%}"
+        "{%- if not (dev and device_entities(dev) | select('match', 'climate\\\\.') | list | count > 0) -%}"
+        if home.get("skip_climate_devices", True) else "{%- if true -%}"
+    )
     template = (
         "{%- set ns = namespace(items=[]) -%}\n"
         f"{{%- set lbl = '{label}' -%}}"
@@ -72,7 +79,8 @@ def alert_strip(home: dict) -> dict:
         "{%- for s in states.binary_sensor | selectattr('attributes.device_class', 'defined')"
         " | selectattr('attributes.device_class', 'in', ['door', 'window', 'garage_door'])"
         " | selectattr('state', 'eq', 'on') | rejectattr('entity_id', 'in', ignore) -%}"
-        "{%- set ns.items = ns.items + ['🚪 ' ~ s.name ~ ' is open'] -%}{%- endfor -%}\n"
+        + skip_climate
+        + "{%- set ns.items = ns.items + ['🚪 ' ~ s.name ~ ' is open'] -%}{%- endif -%}{%- endfor -%}\n"
         "{%- for s in states.sensor | selectattr('attributes.device_class', 'defined')"
         " | selectattr('attributes.device_class', 'eq', 'battery')"
         " | selectattr('state', 'is_number') | rejectattr('entity_id', 'in', ignore) -%}"

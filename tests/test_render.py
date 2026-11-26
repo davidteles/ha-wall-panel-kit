@@ -450,3 +450,17 @@ def test_match_source_must_be_a_sensor():
     home = copy.deepcopy(ONE_ROOM)
     home["match"] = {"source": "input_text.x", "window": "binary_sensor.w"}
     assert any("match source" in e for e in render.check(home))
+
+
+def test_strip_skips_thermostat_and_car_openings_by_default():
+    """A thermostat's guessed open window and a car's doors sit on a device with a climate entity."""
+    strip = render.alert_strip(copy.deepcopy(ONE_ROOM))["content"]
+    assert "device_entities(dev) | select('match', 'climate\\\\.')" in strip
+
+
+def test_strip_lists_them_when_skip_climate_devices_is_off():
+    home = copy.deepcopy(ONE_ROOM)
+    home["skip_climate_devices"] = False
+    strip = render.alert_strip(home)["content"]
+    assert "device_entities(dev)" not in strip
+    assert "is open'] -%}{%- endif -%}{%- endfor -%}" in strip, "the open-door loop still closes its if"
